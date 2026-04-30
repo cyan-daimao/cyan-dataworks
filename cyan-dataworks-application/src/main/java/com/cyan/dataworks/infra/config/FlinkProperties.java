@@ -1,4 +1,4 @@
-package com.cyan.dataworks.config;
+package com.cyan.dataworks.infra.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
