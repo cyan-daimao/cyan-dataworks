@@ -1,0 +1,33 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: cyan-dataworks
+  datasource:
+    url: jdbc:mysql://localhost:3306/cyan_dataworks?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.cyan.dataworks.infra.persistence.**.dos
+  global-config:
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deletedAt
+      logic-delete-value: "now()"
+      logic-not-delete-value: "null"
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# Flink配置
+flink:
+  rest:
+    url: http://localhost:8081
+
+# 数据网关配置
+datagateway:
+  url: http://cyan-datagateway-pre.cyan.com
