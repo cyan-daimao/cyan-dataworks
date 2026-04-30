@@ -42,4 +42,9 @@ public class DataWorkTaskPageQuery {
      * 创建人
      */
     private String createdBy;
+
+    /**
+     * 文件夹ID
+     */
+    private Long folderId;
 }

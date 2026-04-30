@@ -1,5 +1,17 @@
+CREATE TABLE IF NOT EXISTS task_folder (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(200) NOT NULL,
+    parent_id BIGINT DEFAULT 0,
+    created_by VARCHAR(100),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at DATETIME DEFAULT NULL,
+    INDEX idx_parent_id (parent_id)
+);
+
 CREATE TABLE IF NOT EXISTS data_work_task (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    folder_id BIGINT DEFAULT 0,
     name VARCHAR(200) NOT NULL,
     description VARCHAR(500),
     engine_type VARCHAR(20) NOT NULL,
@@ -9,6 +21,7 @@ CREATE TABLE IF NOT EXISTS data_work_task (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at DATETIME DEFAULT NULL,
+    INDEX idx_folder_id (folder_id),
     INDEX idx_name (name),
     INDEX idx_engine_type (engine_type)
 );

@@ -33,6 +33,12 @@ public class DataWorkTaskDO {
     private Long id;
 
     /**
+     * 文件夹ID
+     */
+    @TableField(value = "folder_id")
+    private Long folderId;
+
+    /**
      * 任务名称
      */
     @TableField(value = "name")

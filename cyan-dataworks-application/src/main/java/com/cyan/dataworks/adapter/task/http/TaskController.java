@@ -38,6 +38,7 @@ public class TaskController {
     @GetMapping
     public Response<Page<DataWorkTaskDTO>> page(@RequestParam(required = false) String name,
                                                  @RequestParam(required = false) EngineType engineType,
+                                                 @RequestParam(required = false) Long folderId,
                                                  @RequestParam(required = false) Long current,
                                                  @RequestParam(required = false) Long size) {
         current = current == null ? 1L : current;
@@ -45,6 +46,7 @@ public class TaskController {
         DataWorkTaskPageQuery query = new DataWorkTaskPageQuery()
                 .setName(name)
                 .setEngineType(engineType)
+                .setFolderId(folderId)
                 .setCreatedBy(UserContextHolder.getCurrentEmployee().getPassport());
         query.setCurrent(current).setSize(size);
         Page<DataWorkTaskBO> page = taskService.page(query);

@@ -38,6 +38,7 @@ public class DataWorkTaskRepositoryImpl implements DataWorkTaskRepository {
                 .like(StrUtils.isNotBlank(query.getName()), DataWorkTaskDO::getName, query.getName())
                 .eq(query.getEngineType() != null, DataWorkTaskDO::getEngineType, query.getEngineType())
                 .eq(StrUtils.isNotBlank(query.getCreatedBy()), DataWorkTaskDO::getCreatedBy, query.getCreatedBy())
+                .eq(query.getFolderId() != null, DataWorkTaskDO::getFolderId, query.getFolderId())
                 .orderByDesc(DataWorkTaskDO::getCreatedAt);
         com.baomidou.mybatisplus.extension.plugins.pagination.Page<DataWorkTaskDO> page =
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(query.getCurrent(), query.getSize());
@@ -56,6 +57,7 @@ public class DataWorkTaskRepositoryImpl implements DataWorkTaskRepository {
                 .like(StrUtils.isNotBlank(query.getName()), DataWorkTaskDO::getName, query.getName())
                 .eq(query.getEngineType() != null, DataWorkTaskDO::getEngineType, query.getEngineType())
                 .eq(StrUtils.isNotBlank(query.getCreatedBy()), DataWorkTaskDO::getCreatedBy, query.getCreatedBy())
+                .eq(query.getFolderId() != null, DataWorkTaskDO::getFolderId, query.getFolderId())
                 .orderByDesc(DataWorkTaskDO::getCreatedAt);
         List<DataWorkTaskDO> dos = dataWorkTaskMapper.selectList(wrapper);
         return Optional.ofNullable(dos).orElse(List.of())
