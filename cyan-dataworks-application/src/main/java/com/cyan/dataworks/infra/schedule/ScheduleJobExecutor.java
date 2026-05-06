@@ -1,8 +1,8 @@
 package com.cyan.dataworks.infra.schedule;
 
-import com.cyan.dataworks.application.execution.ExecutionService;
-import com.cyan.dataworks.domain.schedule.ScheduleConfig;
-import com.cyan.dataworks.domain.schedule.repository.ScheduleConfigRepository;
+import com.cyan.dataworks.application.job_instance.JobInstanceService;
+import com.cyan.dataworks.domain.job.schedule.JobSchedule;
+import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.TaskScheduler;
@@ -10,7 +10,6 @@ import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 
@@ -28,20 +27,20 @@ import java.util.concurrent.ScheduledFuture;
 public class ScheduleJobExecutor {
 
     private final TaskScheduler taskScheduler;
-    private final ScheduleConfigRepository scheduleConfigRepository;
-    private final ExecutionService executionService;
+    private final JobScheduleRepository jobScheduleRepository;
+    private final JobInstanceService jobInstanceService;
 
     /**
-     * 存储已注册的任务 Future，key 为 taskId
+     * 存储已注册的任务 Future，key 为 jobId
      */
     private final Map<String, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
 
     public ScheduleJobExecutor(TaskScheduler taskScheduler,
-                               ScheduleConfigRepository scheduleConfigRepository,
-                               ExecutionService executionService) {
+                               JobScheduleRepository jobScheduleRepository,
+                               JobInstanceService jobInstanceService) {
         this.taskScheduler = taskScheduler;
-        this.scheduleConfigRepository = scheduleConfigRepository;
-        this.executionService = executionService;
+        this.jobScheduleRepository = jobScheduleRepository;
+        this.jobInstanceService = jobInstanceService;
     }
 
     /**
@@ -55,58 +54,58 @@ public class ScheduleJobExecutor {
     }
 
     /**
-     * 注册或刷新指定任务的定时调度
+     * 注册或刷新指定作业的定时调度
      *
      * @param config 调度配置
      */
-    public void registerOrUpdate(ScheduleConfig config) {
-        if (config == null || config.getTaskId() == null) {
+    public void registerOrUpdate(JobSchedule config) {
+        if (config == null || config.getJobId() == null) {
             return;
         }
-        String taskId = config.getTaskId();
+        String jobId = config.getJobId();
         // 先取消旧任务
-        cancel(taskId);
+        cancel(jobId);
         // 如果启用且 Cron 表达式有效，则注册新任务
         if (Boolean.TRUE.equals(config.getEnabled()) && config.getCronExpression() != null
                 && !config.getCronExpression().isEmpty()) {
             try {
                 ScheduledFuture<?> future = taskScheduler.schedule(
-                        () -> executeTask(taskId),
+                        () -> executeJob(jobId),
                         new CronTrigger(config.getCronExpression())
                 );
-                scheduledTasks.put(taskId, future);
-                log.info("任务 [{}] 定时调度已注册，Cron: {}", taskId, config.getCronExpression());
+                scheduledTasks.put(jobId, future);
+                log.info("作业 [{}] 定时调度已注册，Cron: {}", jobId, config.getCronExpression());
             } catch (Exception e) {
-                log.error("任务 [{}] Cron 表达式无效: {}", taskId, config.getCronExpression(), e);
+                log.error("作业 [{}] Cron 表达式无效: {}", jobId, config.getCronExpression(), e);
             }
         }
     }
 
     /**
-     * 取消指定任务的定时调度
+     * 取消指定作业的定时调度
      *
-     * @param taskId 任务ID
+     * @param jobId 作业ID
      */
-    public void cancel(String taskId) {
-        ScheduledFuture<?> future = scheduledTasks.remove(taskId);
+    public void cancel(String jobId) {
+        ScheduledFuture<?> future = scheduledTasks.remove(jobId);
         if (future != null && !future.isCancelled()) {
             future.cancel(false);
-            log.info("任务 [{}] 定时调度已取消", taskId);
+            log.info("作业 [{}] 定时调度已取消", jobId);
         }
     }
 
     /**
-     * 执行定时任务
+     * 执行定时作业
      *
-     * @param taskId 任务ID
+     * @param jobId 作业ID
      */
-    private void executeTask(String taskId) {
+    private void executeJob(String jobId) {
         try {
-            log.info("定时任务 [{}] 开始执行", taskId);
-            executionService.execute(taskId);
-            log.info("定时任务 [{}] 执行完成", taskId);
+            log.info("定时作业 [{}] 开始执行", jobId);
+            jobInstanceService.execute(jobId);
+            log.info("定时作业 [{}] 执行完成", jobId);
         } catch (Exception e) {
-            log.error("定时任务 [{}] 执行失败", taskId, e);
+            log.error("定时作业 [{}] 执行失败", jobId, e);
         }
     }
 }
