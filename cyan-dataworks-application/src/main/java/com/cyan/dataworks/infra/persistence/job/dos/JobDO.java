@@ -81,6 +81,12 @@ public class JobDO {
     private LocalDateTime createdAt;
 
     /**
+     * 更新人
+     */
+    @TableField(value = "updated_by")
+    private String updatedBy;
+
+    /**
      * 更新时间
      */
     @TableField(value = "updated_at")

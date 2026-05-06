@@ -78,6 +78,7 @@ public class JobServiceImpl implements JobService {
     public JobBO save(JobCmd cmd, String createdBy) {
         Job job = JobAppConvert.INSTANCE.toJob(cmd);
         job.setCreatedBy(createdBy);
+        job.setUpdatedBy(createdBy);
         job = job.save(jobRepository);
         return JobAppConvert.INSTANCE.toJobBO(job);
     }
@@ -87,11 +88,14 @@ public class JobServiceImpl implements JobService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public JobBO update(String id, JobCmd cmd) {
+    public JobBO update(String id, JobCmd cmd, String updatedBy) {
         Job existing = jobRepository.findById(id);
         Assert.notNull(existing, new SilentException("作业不存在"));
         Job job = JobAppConvert.INSTANCE.toJob(cmd);
         job.setId(id);
+        job.setCreatedBy(existing.getCreatedBy());
+        job.setCreatedAt(existing.getCreatedAt());
+        job.setUpdatedBy(updatedBy);
         job = job.update(jobRepository);
         return JobAppConvert.INSTANCE.toJobBO(job);
     }

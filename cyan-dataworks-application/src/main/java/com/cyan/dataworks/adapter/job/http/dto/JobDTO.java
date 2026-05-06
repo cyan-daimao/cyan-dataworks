@@ -67,6 +67,11 @@ public class JobDTO {
     private LocalDateTime createdAt;
 
     /**
+     * 更新人
+     */
+    private String updatedBy;
+
+    /**
      * 更新时间
      */
     private LocalDateTime updatedAt;

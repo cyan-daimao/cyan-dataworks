@@ -83,7 +83,7 @@ public class JobController {
      */
     @PutMapping("/{id}")
     public Response<JobDTO> update(@PathVariable String id, @RequestBody @Valid JobCmd cmd) {
-        JobBO bo = jobService.update(id, cmd);
+        JobBO bo = jobService.update(id, cmd, UserContextHolder.getCurrentEmployee().getPassport());
         JobDTO dto = JobAdapterConvert.INSTANCE.toJobDTO(bo);
         return Response.success(dto);
     }

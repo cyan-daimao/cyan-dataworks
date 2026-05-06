@@ -38,7 +38,7 @@ public interface JobService {
     /**
      * 更新作业
      */
-    JobBO update(String id, JobCmd cmd);
+    JobBO update(String id, JobCmd cmd, String updatedBy);
 
     /**
      * 删除作业
