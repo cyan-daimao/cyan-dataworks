@@ -22,7 +22,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@TableName("job_instance")
+@TableName("data_work_job_instance")
 public class JobInstanceDO {
 
     /**

@@ -10,6 +10,7 @@ import com.cyan.dataworks.application.job.convert.JobAppConvert;
 import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.domain.job.query.JobPageQuery;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
+import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
 import com.cyan.dataworks.domain.schedule.repository.ScheduleConfigRepository;
 import com.cyan.dataworks.infra.schedule.ScheduleJobExecutor;
 import org.springframework.stereotype.Service;
@@ -28,13 +29,16 @@ import java.util.Optional;
 public class JobServiceImpl implements JobService {
 
     private final JobRepository jobRepository;
+    private final JobScheduleRepository jobScheduleRepository;
     private final ScheduleConfigRepository scheduleConfigRepository;
     private final ScheduleJobExecutor scheduleJobExecutor;
 
     public JobServiceImpl(JobRepository jobRepository,
+                          JobScheduleRepository jobScheduleRepository,
                           ScheduleConfigRepository scheduleConfigRepository,
                           ScheduleJobExecutor scheduleJobExecutor) {
         this.jobRepository = jobRepository;
+        this.jobScheduleRepository = jobScheduleRepository;
         this.scheduleConfigRepository = scheduleConfigRepository;
         this.scheduleJobExecutor = scheduleJobExecutor;
     }
@@ -105,6 +109,7 @@ public class JobServiceImpl implements JobService {
         Job existing = jobRepository.findById(id);
         Assert.notNull(existing, new SilentException("作业不存在"));
         existing.delete(jobRepository);
+        jobScheduleRepository.deleteByJobId(id);
         scheduleConfigRepository.deleteByTaskId(id);
         scheduleJobExecutor.cancel(id);
     }

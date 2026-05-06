@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS execution_record (
     INDEX idx_created_at (created_at) COMMENT '创建时间索引，用于时间范围查询'
 ) COMMENT = '执行记录表（旧版），存储每次任务执行的运行状态和结果';
 
-CREATE TABLE IF NOT EXISTS job (
+CREATE TABLE IF NOT EXISTS data_work_job (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '作业ID，主键，自增',
     folder_id BIGINT DEFAULT 0 COMMENT '所属文件夹ID',
     name VARCHAR(200) NOT NULL COMMENT '作业名称',
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS job (
     INDEX idx_engine_type (engine_type) COMMENT '引擎类型索引，用于筛选'
 ) COMMENT = '数据加工作业表（新版），对标Spark/Flink的Job概念，存储作业定义';
 
-CREATE TABLE IF NOT EXISTS job_instance (
+CREATE TABLE IF NOT EXISTS data_work_job_instance (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '实例ID，主键，自增',
     job_id BIGINT NOT NULL COMMENT '关联的作业ID',
     job_name VARCHAR(200) COMMENT '作业名称（快照，防止作业改名后丢失历史名称）',
@@ -83,3 +83,14 @@ CREATE TABLE IF NOT EXISTS job_instance (
     INDEX idx_job_id (job_id) COMMENT '作业ID索引，用于按作业查询实例',
     INDEX idx_created_at (created_at) COMMENT '创建时间索引，用于时间范围查询'
 ) COMMENT = '作业实例表（新版），对标Spark的Task实例概念，存储每次执行的运行快照';
+
+CREATE TABLE IF NOT EXISTS data_work_job_schedule (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '调度配置ID',
+    job_id BIGINT NOT NULL UNIQUE COMMENT '关联的作业ID',
+    cron_expression VARCHAR(100) NOT NULL COMMENT 'Cron表达式',
+    enabled BOOLEAN DEFAULT FALSE COMMENT '是否启用',
+    next_execute_time DATETIME COMMENT '下次执行时间',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_job_id (job_id)
+) COMMENT = '作业调度配置表（新版），对应data_work_job';
