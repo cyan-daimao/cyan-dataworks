@@ -2,10 +2,10 @@ CREATE TABLE IF NOT EXISTS task_folder (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '文件夹ID，主键，自增',
     name VARCHAR(200) NOT NULL COMMENT '文件夹名称',
     parent_id BIGINT DEFAULT 0 COMMENT '父文件夹ID，0表示根目录',
-    created_by VARCHAR(100) COMMENT '创建人',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_by VARCHAR(100) COMMENT '更新人',
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    created_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '更新人',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     INDEX idx_parent_id (parent_id) COMMENT '父文件夹索引，用于树形查询'
 ) COMMENT = '任务文件夹表，用于对数据加工任务进行分组组织';
@@ -18,9 +18,10 @@ CREATE TABLE IF NOT EXISTS data_work_job (
     engine_type VARCHAR(20) NOT NULL COMMENT '引擎类型：SPARK（SparkSQL）/ FLINK（FlinkSQL）',
     sql_content TEXT NOT NULL COMMENT 'SQL内容',
     status VARCHAR(20) DEFAULT 'DRAFT' COMMENT '作业状态：DRAFT（草稿）/ ONLINE（已上线）/ OFFLINE（已下线）',
-    created_by VARCHAR(100) COMMENT '创建人',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    created_by VARCHAR(100) NOT NULL COMMENT '创建人',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_by VARCHAR(100) NOT NULL COMMENT '更新人',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     INDEX idx_folder_id (folder_id) COMMENT '文件夹索引',
     INDEX idx_name (name) COMMENT '作业名称索引，用于模糊搜索',
@@ -37,7 +38,7 @@ CREATE TABLE IF NOT EXISTS data_work_job_instance (
     cost_time_ms BIGINT COMMENT '执行耗时，单位毫秒',
     result_data TEXT COMMENT '结果数据，JSON格式存储',
     error_message TEXT COMMENT '错误信息，执行失败时记录',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间，即执行开始时间',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间，即执行开始时间',
     INDEX idx_job_id (job_id) COMMENT '作业ID索引，用于按作业查询实例',
     INDEX idx_created_at (created_at) COMMENT '创建时间索引，用于时间范围查询'
 ) COMMENT = '作业实例表（新版），对标Spark的Task实例概念，存储每次执行的运行快照';
@@ -48,7 +49,7 @@ CREATE TABLE IF NOT EXISTS data_work_job_schedule (
     cron_expression VARCHAR(100) NOT NULL COMMENT 'Cron表达式',
     enabled BOOLEAN DEFAULT FALSE COMMENT '是否启用',
     next_execute_time DATETIME COMMENT '下次执行时间',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_job_id (job_id)
 ) COMMENT = '作业调度配置表（新版），对应data_work_job';
