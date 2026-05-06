@@ -1,8 +1,7 @@
-package com.cyan.dataworks.adapter.task.http.dto;
+package com.cyan.dataworks.application.job.bo;
 
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.TaskStatus;
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -11,7 +10,7 @@ import lombok.experimental.Accessors;
 import java.time.LocalDateTime;
 
 /**
- * 数据加工任务数据传输对象
+ * 数据加工作业业务对象
  *
  * @author cy.Y
  * @since 1.0.0
@@ -20,7 +19,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-public class DataWorkTaskDTO {
+public class JobBO {
 
     /**
      * 主键
@@ -28,12 +27,17 @@ public class DataWorkTaskDTO {
     private String id;
 
     /**
-     * 任务名称
+     * 文件夹ID
+     */
+    private Long folderId;
+
+    /**
+     * 作业名称
      */
     private String name;
 
     /**
-     * 任务描述
+     * 作业描述
      */
     private String description;
 
@@ -48,7 +52,7 @@ public class DataWorkTaskDTO {
     private String sqlContent;
 
     /**
-     * 任务状态
+     * 作业状态
      */
     private TaskStatus status;
 
@@ -60,12 +64,10 @@ public class DataWorkTaskDTO {
     /**
      * 创建时间
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime createdAt;
 
     /**
      * 更新时间
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime updatedAt;
 }

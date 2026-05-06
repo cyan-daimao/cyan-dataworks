@@ -39,16 +39,34 @@ public class ExecutionController {
     }
 
     /**
-     * 分页查询执行记录
+     * 分页查询执行记录（按任务）
      */
     @GetMapping("/tasks/{taskId}/executions")
-    public Response<Page<ExecutionRecordDTO>> page(@PathVariable String taskId,
-                                                    @RequestParam(required = false) Long current,
-                                                    @RequestParam(required = false) Long size) {
+    public Response<Page<ExecutionRecordDTO>> pageByTaskId(@PathVariable String taskId,
+                                                            @RequestParam(required = false) Long current,
+                                                            @RequestParam(required = false) Long size) {
         current = current == null ? 1L : current;
         size = size == null ? 10L : size;
         ExecutionRecordPageQuery query = new ExecutionRecordPageQuery()
                 .setTaskId(taskId)
+                .setCurrent(current)
+                .setSize(size);
+        Page<ExecutionRecordBO> page = executionService.page(query);
+        List<ExecutionRecordDTO> data = Optional.ofNullable(page.getData()).orElse(List.of())
+                .stream().map(ExecutionAdapterConvert.INSTANCE::toExecutionRecordDTO).toList();
+        Page<ExecutionRecordDTO> result = new Page<>(data, page.getCurrent(), page.getSize(), page.getTotal());
+        return Response.success(result);
+    }
+
+    /**
+     * 分页查询全部执行记录
+     */
+    @GetMapping("/executions")
+    public Response<Page<ExecutionRecordDTO>> page(@RequestParam(required = false) Long current,
+                                                    @RequestParam(required = false) Long size) {
+        current = current == null ? 1L : current;
+        size = size == null ? 10L : size;
+        ExecutionRecordPageQuery query = new ExecutionRecordPageQuery()
                 .setCurrent(current)
                 .setSize(size);
         Page<ExecutionRecordBO> page = executionService.page(query);

@@ -1,0 +1,136 @@
+package com.cyan.dataworks.domain.job_instance;
+
+import com.cyan.arch.common.api.Assert;
+import com.cyan.arch.common.api.SilentException;
+import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
+import com.cyan.dataworks.enums.EngineType;
+import com.cyan.dataworks.enums.ExecutionStatus;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
+
+import java.time.LocalDateTime;
+
+/**
+ * 数据加工作业实例（JobInstance）领域对象
+ *
+ * <p>对标 Spark 中的 Task 实例概念：一个 JobInstance 代表一次具体的执行记录，
+ * 包含执行状态、耗时、结果数据、错误信息等运行时数据。每个 JobInstance 都隶属于一个 Job。</p>
+ *
+ * <p>Flink 实时任务虽然理论上持续运行无明确"实例"边界，但为统一建模，
+ * 每次手动触发或调度触发仍产生一个 JobInstance，用于记录执行快照。</p>
+ *
+ * @author cy.Y
+ * @since 1.0.0
+ */
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Accessors(chain = true)
+public class JobInstance {
+
+    /**
+     * 主键
+     */
+    private String id;
+
+    /**
+     * 作业ID
+     */
+    private String jobId;
+
+    /**
+     * 作业名称（快照，防止 Job 改名后历史记录丢失名称）
+     */
+    private String jobName;
+
+    /**
+     * 引擎类型
+     */
+    private EngineType engineType;
+
+    /**
+     * SQL内容（快照，记录执行时的 SQL）
+     */
+    private String sqlContent;
+
+    /**
+     * 执行状态
+     */
+    private ExecutionStatus status;
+
+    /**
+     * 耗时（毫秒）
+     */
+    private Long costTimeMs;
+
+    /**
+     * 结果数据（JSON）
+     */
+    private String resultData;
+
+    /**
+     * 错误信息
+     */
+    private String errorMessage;
+
+    /**
+     * 创建时间
+     */
+    private LocalDateTime createdAt;
+
+    /**
+     * 保存实例
+     */
+    public JobInstance save(JobInstanceRepository repository) {
+        Assert.isBlank(this.id, new SilentException("新增时id必须为空"));
+        Assert.notBlank(this.jobId, new SilentException("作业ID不能为空"));
+        Assert.notNull(this.engineType, new SilentException("引擎类型不能为空"));
+        Assert.notBlank(this.sqlContent, new SilentException("SQL内容不能为空"));
+        Assert.notNull(this.status, new SilentException("执行状态不能为空"));
+        return repository.save(this);
+    }
+
+    /**
+     * 更新实例
+     */
+    public JobInstance update(JobInstanceRepository repository) {
+        Assert.notBlank(this.id, new SilentException("更新时id不能为空"));
+        return repository.updateById(this);
+    }
+
+    /**
+     * 标记实例为成功
+     */
+    public JobInstance markSuccess(String resultData, long costTimeMs, JobInstanceRepository repository) {
+        Assert.notBlank(this.id, new SilentException("实例id不能为空"));
+        Assert.isTrue(this.status == ExecutionStatus.RUNNING, new SilentException("只有运行中实例可标记成功"));
+        this.status = ExecutionStatus.SUCCESS;
+        this.resultData = resultData;
+        this.costTimeMs = costTimeMs;
+        return repository.updateById(this);
+    }
+
+    /**
+     * 标记实例为失败
+     */
+    public JobInstance markFailed(String errorMessage, long costTimeMs, JobInstanceRepository repository) {
+        Assert.notBlank(this.id, new SilentException("实例id不能为空"));
+        this.status = ExecutionStatus.FAILED;
+        this.errorMessage = errorMessage;
+        this.costTimeMs = costTimeMs;
+        return repository.updateById(this);
+    }
+
+    /**
+     * 终止实例
+     */
+    public JobInstance terminate(JobInstanceRepository repository) {
+        Assert.notBlank(this.id, new SilentException("实例id不能为空"));
+        Assert.isTrue(this.status == ExecutionStatus.RUNNING, new SilentException("只有运行中实例可终止"));
+        this.status = ExecutionStatus.FAILED;
+        this.errorMessage = "用户手动终止";
+        return repository.updateById(this);
+    }
+}
