@@ -1,6 +1,7 @@
 package com.cyan.dataworks.adapter.job.http.dto;
 
 import com.cyan.dataworks.enums.EngineType;
+import com.cyan.dataworks.enums.NodeType;
 import com.cyan.dataworks.enums.TaskStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -47,9 +48,19 @@ public class JobDTO {
     private EngineType engineType;
 
     /**
+     * 节点类型
+     */
+    private NodeType nodeType;
+
+    /**
      * SQL内容
      */
     private String sqlContent;
+
+    /**
+     * 节点配置JSON
+     */
+    private String configJson;
 
     /**
      * 作业状态

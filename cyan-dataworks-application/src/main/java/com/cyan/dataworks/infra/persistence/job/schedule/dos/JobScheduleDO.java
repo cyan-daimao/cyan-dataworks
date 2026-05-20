@@ -2,6 +2,7 @@ package com.cyan.dataworks.infra.persistence.job.schedule.dos;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -54,14 +55,33 @@ public class JobScheduleDO {
     private LocalDateTime nextExecuteTime;
 
     /**
+     * 创建人
+     */
+    @TableField(value = "created_by")
+    private String createdBy;
+
+    /**
      * 创建时间
      */
     @TableField(value = "created_at")
     private LocalDateTime createdAt;
 
     /**
+     * 更新人
+     */
+    @TableField(value = "updated_by")
+    private String updatedBy;
+
+    /**
      * 更新时间
      */
     @TableField(value = "updated_at")
     private LocalDateTime updatedAt;
+
+    /**
+     * 删除时间
+     */
+    @TableField(value = "deleted_at")
+    @TableLogic(value = "null", delval = "now()")
+    private LocalDateTime deletedAt;
 }

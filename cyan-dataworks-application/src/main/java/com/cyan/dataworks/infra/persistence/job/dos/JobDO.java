@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.cyan.dataworks.enums.EngineType;
+import com.cyan.dataworks.enums.NodeType;
 import com.cyan.dataworks.enums.TaskStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -57,10 +58,22 @@ public class JobDO {
     private EngineType engineType;
 
     /**
+     * 节点类型
+     */
+    @TableField(value = "node_type")
+    private NodeType nodeType;
+
+    /**
      * SQL内容
      */
     @TableField(value = "sql_content")
     private String sqlContent;
+
+    /**
+     * 节点配置JSON
+     */
+    @TableField(value = "config_json")
+    private String configJson;
 
     /**
      * 作业状态

@@ -1,6 +1,7 @@
 package com.cyan.dataworks.domain.job.query;
 
 import com.cyan.dataworks.enums.EngineType;
+import com.cyan.dataworks.enums.NodeType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -37,6 +38,11 @@ public class JobPageQuery {
      * 引擎类型
      */
     private EngineType engineType;
+
+    /**
+     * 节点类型
+     */
+    private NodeType nodeType;
 
     /**
      * 创建人

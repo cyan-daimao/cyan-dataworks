@@ -37,6 +37,7 @@ public class JobRepositoryImpl implements JobRepository {
         LambdaQueryWrapper<JobDO> wrapper = new LambdaQueryWrapper<JobDO>()
                 .like(StrUtils.isNotBlank(query.getName()), JobDO::getName, query.getName())
                 .eq(query.getEngineType() != null, JobDO::getEngineType, query.getEngineType())
+                .eq(query.getNodeType() != null, JobDO::getNodeType, query.getNodeType())
                 .eq(StrUtils.isNotBlank(query.getCreatedBy()), JobDO::getCreatedBy, query.getCreatedBy())
                 .eq(query.getFolderId() != null, JobDO::getFolderId, query.getFolderId())
                 .orderByDesc(JobDO::getCreatedAt);
@@ -56,6 +57,7 @@ public class JobRepositoryImpl implements JobRepository {
         LambdaQueryWrapper<JobDO> wrapper = new LambdaQueryWrapper<JobDO>()
                 .like(StrUtils.isNotBlank(query.getName()), JobDO::getName, query.getName())
                 .eq(query.getEngineType() != null, JobDO::getEngineType, query.getEngineType())
+                .eq(query.getNodeType() != null, JobDO::getNodeType, query.getNodeType())
                 .eq(StrUtils.isNotBlank(query.getCreatedBy()), JobDO::getCreatedBy, query.getCreatedBy())
                 .eq(query.getFolderId() != null, JobDO::getFolderId, query.getFolderId())
                 .orderByDesc(JobDO::getCreatedAt);

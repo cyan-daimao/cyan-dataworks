@@ -9,6 +9,7 @@ import com.cyan.dataworks.application.job.bo.JobBO;
 import com.cyan.dataworks.application.job.cmd.JobCmd;
 import com.cyan.dataworks.domain.job.query.JobPageQuery;
 import com.cyan.dataworks.enums.EngineType;
+import com.cyan.dataworks.enums.NodeType;
 import com.cyan.employee.login.filter.UserContextHolder;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -40,6 +41,7 @@ public class JobController {
     @GetMapping
     public Response<Page<JobDTO>> page(@RequestParam(required = false) String name,
                                         @RequestParam(required = false) EngineType engineType,
+                                        @RequestParam(required = false) NodeType nodeType,
                                         @RequestParam(required = false) Long folderId,
                                         @RequestParam(required = false) Long current,
                                         @RequestParam(required = false) Long size) {
@@ -48,6 +50,7 @@ public class JobController {
         JobPageQuery query = new JobPageQuery()
                 .setName(name)
                 .setEngineType(engineType)
+                .setNodeType(nodeType)
                 .setFolderId(folderId)
                 .setCreatedBy(UserContextHolder.getCurrentEmployee().getPassport());
         query.setCurrent(current).setSize(size);

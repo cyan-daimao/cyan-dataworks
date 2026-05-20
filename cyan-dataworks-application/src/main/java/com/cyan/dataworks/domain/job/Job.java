@@ -4,6 +4,7 @@ import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.SilentException;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
 import com.cyan.dataworks.enums.EngineType;
+import com.cyan.dataworks.enums.NodeType;
 import com.cyan.dataworks.enums.TaskStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -53,9 +54,19 @@ public class Job {
     private EngineType engineType;
 
     /**
+     * 节点类型
+     */
+    private NodeType nodeType;
+
+    /**
      * SQL内容
      */
     private String sqlContent;
+
+    /**
+     * 节点配置JSON
+     */
+    private String configJson;
 
     /**
      * 作业状态
@@ -92,9 +103,7 @@ public class Job {
      */
     public Job save(JobRepository repository) {
         Assert.isBlank(this.id, new SilentException("新增时id必须为空"));
-        Assert.notBlank(this.name, new SilentException("作业名称不能为空"));
-        Assert.notNull(this.engineType, new SilentException("引擎类型不能为空"));
-        Assert.notBlank(this.sqlContent, new SilentException("SQL内容不能为空"));
+        this.validateDefinition();
         if (this.status == null) {
             this.status = TaskStatus.DRAFT;
         }
@@ -106,9 +115,7 @@ public class Job {
      */
     public Job update(JobRepository repository) {
         Assert.notBlank(this.id, new SilentException("更新时id不能为空"));
-        Assert.notBlank(this.name, new SilentException("作业名称不能为空"));
-        Assert.notNull(this.engineType, new SilentException("引擎类型不能为空"));
-        Assert.notBlank(this.sqlContent, new SilentException("SQL内容不能为空"));
+        this.validateDefinition();
         return repository.updateById(this);
     }
 
@@ -118,5 +125,55 @@ public class Job {
     public void delete(JobRepository repository) {
         Assert.notBlank(this.id, new SilentException("删除时id不能为空"));
         repository.deleteById(this.id);
+    }
+
+    /**
+     * 校验作业定义
+     */
+    public void validateDefinition() {
+        Assert.notBlank(this.name, new SilentException("作业名称不能为空"));
+        fillDefaultNodeType();
+        fillDefaultEngineType();
+        Assert.notNull(this.nodeType, new SilentException("节点类型不能为空"));
+        Assert.notNull(this.engineType, new SilentException("引擎类型不能为空"));
+        if (this.nodeType.isSqlNode()) {
+            SqlPolicy.assertSelectOnly(this.sqlContent);
+        }
+        if (this.nodeType == NodeType.ODS_TO_DWD) {
+            Assert.notBlank(this.configJson, new SilentException("ODS到DWD节点配置不能为空"));
+            Assert.isTrue(this.engineType == EngineType.FLINK, new SilentException("ODS到DWD节点必须使用FlinkSQL引擎"));
+        }
+    }
+
+    /**
+     * 补齐默认节点类型
+     */
+    private void fillDefaultNodeType() {
+        if (this.nodeType != null) {
+            return;
+        }
+        if (this.engineType == EngineType.FLINK) {
+            this.nodeType = NodeType.FLINK_SQL;
+            return;
+        }
+        if (this.engineType == EngineType.SPARK) {
+            this.nodeType = NodeType.SPARK_SQL;
+        }
+    }
+
+    /**
+     * 补齐默认引擎类型
+     */
+    private void fillDefaultEngineType() {
+        if (this.engineType != null || this.nodeType == null) {
+            return;
+        }
+        if (this.nodeType == NodeType.ODS_TO_DWD || this.nodeType == NodeType.FLINK_SQL) {
+            this.engineType = EngineType.FLINK;
+            return;
+        }
+        if (this.nodeType == NodeType.SPARK_SQL) {
+            this.engineType = EngineType.SPARK;
+        }
     }
 }

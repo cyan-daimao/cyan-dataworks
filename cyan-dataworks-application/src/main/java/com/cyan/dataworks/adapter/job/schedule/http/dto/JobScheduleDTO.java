@@ -45,9 +45,19 @@ public class JobScheduleDTO {
     private LocalDateTime nextExecuteTime;
 
     /**
+     * 创建人
+     */
+    private String createdBy;
+
+    /**
      * 创建时间
      */
     private LocalDateTime createdAt;
+
+    /**
+     * 更新人
+     */
+    private String updatedBy;
 
     /**
      * 更新时间

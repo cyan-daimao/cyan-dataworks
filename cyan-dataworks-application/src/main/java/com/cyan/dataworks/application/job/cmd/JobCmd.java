@@ -1,6 +1,7 @@
 package com.cyan.dataworks.application.job.cmd;
 
 import com.cyan.dataworks.enums.EngineType;
+import com.cyan.dataworks.enums.NodeType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -38,8 +39,18 @@ public class JobCmd {
     private EngineType engineType;
 
     /**
+     * 节点类型
+     */
+    private NodeType nodeType;
+
+    /**
      * SQL内容
      */
     @NotBlank(message = "SQL内容不能为空")
     private String sqlContent;
+
+    /**
+     * 节点配置JSON
+     */
+    private String configJson;
 }
