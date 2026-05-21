@@ -1,6 +1,6 @@
 package com.cyan.dataworks.infra.persistence.job.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.infra.persistence.job.dos.JobDO;
 import org.mapstruct.Mapper;

@@ -1,6 +1,6 @@
 package com.cyan.dataworks.adapter.job.http.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.dataworks.adapter.job.http.dto.JobDTO;
 import com.cyan.dataworks.application.job.bo.JobBO;
 import org.mapstruct.Mapper;

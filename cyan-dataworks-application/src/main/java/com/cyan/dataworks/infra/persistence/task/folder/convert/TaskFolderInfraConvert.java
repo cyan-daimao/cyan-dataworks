@@ -1,6 +1,6 @@
 package com.cyan.dataworks.infra.persistence.task.folder.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.dataworks.domain.task.folder.TaskFolder;
 import com.cyan.dataworks.infra.persistence.task.folder.dos.TaskFolderDO;
 import org.mapstruct.Mapper;

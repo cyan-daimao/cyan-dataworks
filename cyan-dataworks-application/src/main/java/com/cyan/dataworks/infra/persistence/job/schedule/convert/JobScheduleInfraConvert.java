@@ -1,6 +1,6 @@
 package com.cyan.dataworks.infra.persistence.job.schedule.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.dataworks.domain.job.schedule.JobSchedule;
 import com.cyan.dataworks.infra.persistence.job.schedule.dos.JobScheduleDO;
 import org.mapstruct.Mapper;

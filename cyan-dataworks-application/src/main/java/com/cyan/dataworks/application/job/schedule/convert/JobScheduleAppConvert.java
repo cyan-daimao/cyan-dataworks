@@ -1,6 +1,6 @@
 package com.cyan.dataworks.application.job.schedule.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.dataworks.application.job.schedule.bo.JobScheduleBO;
 import com.cyan.dataworks.application.job.schedule.cmd.JobScheduleCmd;
 import com.cyan.dataworks.domain.job.schedule.JobSchedule;

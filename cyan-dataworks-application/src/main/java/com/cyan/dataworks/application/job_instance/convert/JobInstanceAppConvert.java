@@ -1,6 +1,6 @@
 package com.cyan.dataworks.application.job_instance.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
 import com.cyan.dataworks.application.job_instance.cmd.JobInstanceCmd;
 import com.cyan.dataworks.domain.job_instance.JobInstance;
