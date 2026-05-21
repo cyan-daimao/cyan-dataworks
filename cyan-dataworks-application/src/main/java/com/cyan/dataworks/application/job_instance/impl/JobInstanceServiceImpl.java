@@ -18,7 +18,7 @@ import com.cyan.dataworks.domain.job_instance.query.JobInstancePageQuery;
 import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
-import com.cyan.dataworks.infra.rpc.FlinkRpcClient;
+import com.cyan.dataworks.infra.remote.flink.FlinkRemoteService;
 import com.cyan.datagateway.client.SqlGatewayClient;
 import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
 import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
@@ -41,18 +41,18 @@ public class JobInstanceServiceImpl implements JobInstanceService {
     private final JobRepository jobRepository;
     private final JobInstanceRepository jobInstanceRepository;
     private final SqlGatewayClient sqlGatewayClient;
-    private final FlinkRpcClient flinkRpcClient;
+    private final FlinkRemoteService flinkRemoteService;
     private final JobExecutionPlanner jobExecutionPlanner;
 
     public JobInstanceServiceImpl(JobRepository jobRepository,
                                   JobInstanceRepository jobInstanceRepository,
                                   SqlGatewayClient sqlGatewayClient,
-                                  FlinkRpcClient flinkRpcClient,
+                                  FlinkRemoteService flinkRemoteService,
                                   JobExecutionPlanner jobExecutionPlanner) {
         this.jobRepository = jobRepository;
         this.jobInstanceRepository = jobInstanceRepository;
         this.sqlGatewayClient = sqlGatewayClient;
-        this.flinkRpcClient = flinkRpcClient;
+        this.flinkRemoteService = flinkRemoteService;
         this.jobExecutionPlanner = jobExecutionPlanner;
     }
 
@@ -164,7 +164,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
 
         long startTime = System.currentTimeMillis();
         try {
-            String resultData = flinkRpcClient.submitApplication(job.getName(), executableSql);
+            String resultData = flinkRemoteService.submitApplication(job.getName(), executableSql);
             instance.markSuccess(resultData, System.currentTimeMillis() - startTime, jobInstanceRepository);
         } catch (Exception e) {
             instance.markFailed(e.getMessage(), System.currentTimeMillis() - startTime, jobInstanceRepository);
@@ -241,7 +241,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
      * 执行FlinkSQL
      */
     private String executeFlinkSql(String sql) {
-        return flinkRpcClient.executeSql(sql);
+        return flinkRemoteService.executeSql(sql);
     }
 
     /**

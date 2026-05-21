@@ -4,8 +4,8 @@ import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.Response;
 import com.cyan.arch.common.api.SilentException;
 import com.cyan.dataworks.adapter.task.http.dto.TaskFolderDTO;
+import com.cyan.dataworks.application.task.TaskFolderService;
 import com.cyan.dataworks.domain.task.folder.TaskFolder;
-import com.cyan.dataworks.domain.task.folder.TaskFolderRepository;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,10 +20,10 @@ import java.util.List;
 @RequestMapping("/api/v1/data-work/folders")
 public class FolderController {
 
-    private final TaskFolderRepository taskFolderRepository;
+    private final TaskFolderService taskFolderService;
 
-    public FolderController(TaskFolderRepository taskFolderRepository) {
-        this.taskFolderRepository = taskFolderRepository;
+    public FolderController(TaskFolderService taskFolderService) {
+        this.taskFolderService = taskFolderService;
     }
 
     /**
@@ -31,7 +31,7 @@ public class FolderController {
      */
     @GetMapping
     public Response<List<TaskFolderDTO>> tree() {
-        List<TaskFolder> all = taskFolderRepository.findAll();
+        List<TaskFolder> all = taskFolderService.findAll();
         List<TaskFolderDTO> tree = buildTree(all, "0");
         return Response.success(tree);
     }
@@ -41,10 +41,7 @@ public class FolderController {
      */
     @PostMapping
     public Response<TaskFolderDTO> save(@RequestBody TaskFolderDTO dto) {
-        TaskFolder folder = new TaskFolder()
-                .setName(dto.getName())
-                .setParentId(dto.getParentId() == null ? "0" : dto.getParentId());
-        folder = folder.save(taskFolderRepository);
+        TaskFolder folder = taskFolderService.save(dto.getName(), dto.getParentId());
         return Response.success(toDTO(folder));
     }
 
@@ -53,13 +50,7 @@ public class FolderController {
      */
     @PutMapping("/{id}")
     public Response<TaskFolderDTO> update(@PathVariable String id, @RequestBody TaskFolderDTO dto) {
-        TaskFolder existing = taskFolderRepository.findById(id);
-        Assert.notNull(existing, new SilentException("文件夹不存在"));
-        TaskFolder folder = new TaskFolder()
-                .setId(id)
-                .setName(dto.getName())
-                .setParentId(dto.getParentId());
-        folder = folder.update(taskFolderRepository);
+        TaskFolder folder = taskFolderService.update(id, dto.getName(), dto.getParentId());
         return Response.success(toDTO(folder));
     }
 
@@ -68,9 +59,7 @@ public class FolderController {
      */
     @DeleteMapping("/{id}")
     public Response<Void> delete(@PathVariable String id) {
-        TaskFolder existing = taskFolderRepository.findById(id);
-        Assert.notNull(existing, new SilentException("文件夹不存在"));
-        existing.delete(taskFolderRepository);
+        taskFolderService.delete(id);
         return Response.success();
     }
 

@@ -1,5 +1,6 @@
 package com.cyan.dataworks.infra.persistence.task.folder.convert;
 
+import com.cyan.arch.common.mapstruct.MapstructConvert;
 import com.cyan.dataworks.domain.task.folder.TaskFolder;
 import com.cyan.dataworks.infra.persistence.task.folder.dos.TaskFolderDO;
 import org.mapstruct.Mapper;
@@ -12,7 +13,7 @@ import org.mapstruct.factory.Mappers;
  * @author cy.Y
  * @since 1.0.0
  */
-@Mapper
+@Mapper(componentModel = "spring", uses = MapstructConvert.class)
 public interface TaskFolderInfraConvert {
 
     TaskFolderInfraConvert INSTANCE = Mappers.getMapper(TaskFolderInfraConvert.class);

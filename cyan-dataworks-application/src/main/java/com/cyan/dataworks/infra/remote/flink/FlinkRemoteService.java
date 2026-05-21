@@ -1,21 +1,17 @@
-package com.cyan.dataworks.infra.rpc;
+package com.cyan.dataworks.infra.remote.flink;
 
 import com.cyan.arch.common.api.SilentException;
 import com.cyan.arch.common.util.JSON;
 import com.cyan.dataworks.infra.config.FlinkProperties;
+import com.cyan.dataworks.infra.remote.flink.client.FlinkRpcClient;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -25,19 +21,17 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Flink SQL Gateway REST API 客户端
+ * Flink SQL Gateway REST API 远程服务
+ *
+ * <p>封装 Flink SQL Gateway 的会话管理、语句执行、结果轮询与资源清理等业务逻辑，
+ * 底层 HTTP 调用通过 {@link FlinkRpcClient}（OpenFeign）完成。</p>
  *
  * @author cy.Y
  * @since 1.0.0
  */
 @Slf4j
 @Component
-public class FlinkRpcClient {
-
-    /**
-     * HTTP客户端
-     */
-    private final RestTemplate restTemplate;
+public class FlinkRemoteService {
 
     /**
      * JSON解析器
@@ -50,15 +44,21 @@ public class FlinkRpcClient {
     private final FlinkProperties flinkProperties;
 
     /**
-     * 创建Flink SQL Gateway客户端
-     *
-     * @param objectMapper JSON解析器
-     * @param flinkProperties Flink配置属性
+     * Flink Gateway Feign 客户端
      */
-    public FlinkRpcClient(ObjectMapper objectMapper, FlinkProperties flinkProperties) {
-        this.restTemplate = new RestTemplate();
+    private final FlinkRpcClient flinkRpcClient;
+
+    /**
+     * 创建Flink SQL Gateway远程服务
+     *
+     * @param objectMapper     JSON解析器
+     * @param flinkProperties  Flink配置属性
+     * @param flinkRpcClient   Flink Gateway Feign 客户端
+     */
+    public FlinkRemoteService(ObjectMapper objectMapper, FlinkProperties flinkProperties, FlinkRpcClient flinkRpcClient) {
         this.objectMapper = objectMapper;
         this.flinkProperties = flinkProperties;
+        this.flinkRpcClient = flinkRpcClient;
     }
 
     /**
@@ -78,7 +78,7 @@ public class FlinkRpcClient {
         String operationHandle = null;
         long startTime = System.currentTimeMillis();
         try {
-            sessionHandle = openSession(gatewayUrl);
+            sessionHandle = openSession();
             List<String> statements = splitStatements(sql);
             AssertStatements.notEmpty(statements);
             List<Map<String, Object>> executedStatements = new ArrayList<>();
@@ -86,15 +86,15 @@ public class FlinkRpcClient {
             for (int i = 0; i < statements.size(); i++) {
                 boolean last = i == statements.size() - 1;
                 String statement = statements.get(i);
-                operationHandle = executeStatement(gatewayUrl, sessionHandle, statement);
-                lastResult = fetchOperationResult(gatewayUrl, sessionHandle, operationHandle, statement);
+                operationHandle = executeStatement(sessionHandle, statement);
+                lastResult = fetchOperationResult(sessionHandle, operationHandle, statement);
                 executedStatements.add(Map.of(
                         "statement", statement,
                         "operationHandle", operationHandle,
                         "result", parseJsonOrRaw(lastResult)
                 ));
                 if (!last) {
-                    closeOperation(gatewayUrl, sessionHandle, operationHandle);
+                    closeOperation(sessionHandle, operationHandle);
                     operationHandle = null;
                 }
             }
@@ -111,7 +111,7 @@ public class FlinkRpcClient {
             log.error("FlinkSQL临时执行失败", e);
             throw new SilentException("FlinkSQL临时执行失败：" + e.getMessage());
         } finally {
-            closeQuietly(gatewayUrl, sessionHandle, operationHandle);
+            closeQuietly(sessionHandle, operationHandle);
         }
     }
 
@@ -119,7 +119,7 @@ public class FlinkRpcClient {
      * 以Application Mode提交FlinkSQL正式作业
      *
      * @param jobName 作业名称
-     * @param sql SQL语句
+     * @param sql     SQL语句
      * @return 提交结果JSON
      */
     public String submitApplication(String jobName, String sql) {
@@ -166,16 +166,12 @@ public class FlinkRpcClient {
     /**
      * 打开SQL Gateway session
      *
-     * @param gatewayUrl SQL Gateway地址
      * @return sessionHandle
      */
-    private String openSession(String gatewayUrl) throws Exception {
-        ResponseEntity<String> response = restTemplate.postForEntity(
-                gatewayUrl + "/v1/sessions",
-                jsonEntity(Map.of()),
-                String.class
-        );
-        OpenSessionResponse body = readResponse(response.getBody(), OpenSessionResponse.class);
+    private String openSession() throws Exception {
+        URI uri = URI.create(getGatewayUrl() + "/v1/sessions");
+        String response = flinkRpcClient.post(uri, Map.of());
+        OpenSessionResponse body = readResponse(response, OpenSessionResponse.class);
         if (body == null || body.getSessionHandle() == null || body.getSessionHandle().isBlank()) {
             throw new SilentException("SQL Gateway打开session失败");
         }
@@ -185,20 +181,16 @@ public class FlinkRpcClient {
     /**
      * 执行单条SQL语句
      *
-     * @param gatewayUrl SQL Gateway地址
      * @param sessionHandle session标识
-     * @param statement SQL语句
+     * @param statement     SQL语句
      * @return operationHandle
      */
-    private String executeStatement(String gatewayUrl, String sessionHandle, String statement) throws Exception {
+    private String executeStatement(String sessionHandle, String statement) throws Exception {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("statement", statement);
-        ResponseEntity<String> response = restTemplate.postForEntity(
-                gatewayUrl + "/v1/sessions/" + encode(sessionHandle) + "/statements",
-                jsonEntity(body),
-                String.class
-        );
-        ExecuteStatementResponse result = readResponse(response.getBody(), ExecuteStatementResponse.class);
+        URI uri = URI.create(getGatewayUrl() + "/v1/sessions/" + encode(sessionHandle) + "/statements");
+        String response = flinkRpcClient.post(uri, body);
+        ExecuteStatementResponse result = readResponse(response, ExecuteStatementResponse.class);
         if (result == null || result.getOperationHandle() == null || result.getOperationHandle().isBlank()) {
             throw new SilentException("SQL Gateway提交SQL失败");
         }
@@ -208,15 +200,14 @@ public class FlinkRpcClient {
     /**
      * 拉取operation执行结果
      *
-     * @param gatewayUrl SQL Gateway地址
-     * @param sessionHandle session标识
+     * @param sessionHandle   session标识
      * @param operationHandle operation标识
-     * @param statement SQL语句
+     * @param statement       SQL语句
      * @return operation结果JSON
      */
-    private String fetchOperationResult(String gatewayUrl, String sessionHandle, String operationHandle, String statement) {
+    private String fetchOperationResult(String sessionHandle, String operationHandle, String statement) {
         if (!isQueryStatement(statement)) {
-            return getOperationStatus(gatewayUrl, sessionHandle, operationHandle);
+            return getOperationStatus(sessionHandle, operationHandle);
         }
         String resultUri = "/v1/sessions/" + encode(sessionHandle)
                 + "/operations/" + encode(operationHandle)
@@ -229,7 +220,7 @@ public class FlinkRpcClient {
         String jobId = "";
         int readPages = 0;
         while (readPages < getPreviewMaxResultPages() && data.size() < getPreviewMaxResultRows()) {
-            String body = fetchReadyResultPage(gatewayUrl, resultUri);
+            String body = fetchReadyResultPage(resultUri);
             if (body == null || body.isBlank()) {
                 break;
             }
@@ -291,16 +282,14 @@ public class FlinkRpcClient {
     /**
      * 拉取已就绪的结果页
      *
-     * @param gatewayUrl SQL Gateway地址
      * @param resultUri 结果页相对路径
      * @return 结果页JSON
      */
-    private String fetchReadyResultPage(String gatewayUrl, String resultUri) {
-        String resultUrl = gatewayUrl + resultUri;
+    private String fetchReadyResultPage(String resultUri) {
+        URI uri = URI.create(getGatewayUrl() + resultUri);
         int pollTimes = getPreviewPollTimes();
         for (int i = 0; i < pollTimes; i++) {
-            ResponseEntity<String> response = restTemplate.getForEntity(resultUrl, String.class);
-            String body = response.getBody();
+            String body = flinkRpcClient.get(uri);
             if (body != null && !body.contains("\"resultType\":\"NOT_READY\"")) {
                 return body;
             }
@@ -312,70 +301,55 @@ public class FlinkRpcClient {
     /**
      * 查询operation状态
      *
-     * @param gatewayUrl SQL Gateway地址
-     * @param sessionHandle session标识
+     * @param sessionHandle   session标识
      * @param operationHandle operation标识
      * @return operation状态JSON
      */
-    private String getOperationStatus(String gatewayUrl, String sessionHandle, String operationHandle) {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-                gatewayUrl + "/v1/sessions/" + encode(sessionHandle)
-                        + "/operations/" + encode(operationHandle) + "/status",
-                String.class
-        );
-        return response.getBody();
+    private String getOperationStatus(String sessionHandle, String operationHandle) {
+        URI uri = URI.create(getGatewayUrl() + "/v1/sessions/" + encode(sessionHandle)
+                + "/operations/" + encode(operationHandle) + "/status");
+        return flinkRpcClient.get(uri);
     }
 
     /**
      * 关闭operation
      *
-     * @param gatewayUrl SQL Gateway地址
-     * @param sessionHandle session标识
+     * @param sessionHandle   session标识
      * @param operationHandle operation标识
      */
-    private void closeOperation(String gatewayUrl, String sessionHandle, String operationHandle) {
-        restTemplate.exchange(
-                gatewayUrl + "/v1/sessions/" + encode(sessionHandle)
-                        + "/operations/" + encode(operationHandle) + "/close",
-                HttpMethod.DELETE,
-                jsonEntity(Map.of()),
-                String.class
-        );
+    private void closeOperation(String sessionHandle, String operationHandle) {
+        URI uri = URI.create(getGatewayUrl() + "/v1/sessions/" + encode(sessionHandle)
+                + "/operations/" + encode(operationHandle) + "/close");
+        flinkRpcClient.delete(uri, Map.of());
     }
 
     /**
      * 关闭session
      *
-     * @param gatewayUrl SQL Gateway地址
      * @param sessionHandle session标识
      */
-    private void closeSession(String gatewayUrl, String sessionHandle) {
-        restTemplate.exchange(
-                gatewayUrl + "/v1/sessions/" + encode(sessionHandle),
-                HttpMethod.DELETE,
-                jsonEntity(Map.of()),
-                String.class
-        );
+    private void closeSession(String sessionHandle) {
+        URI uri = URI.create(getGatewayUrl() + "/v1/sessions/" + encode(sessionHandle));
+        flinkRpcClient.delete(uri, Map.of());
     }
 
     /**
      * 安静关闭SQL Gateway资源
      *
-     * @param gatewayUrl SQL Gateway地址
-     * @param sessionHandle session标识
+     * @param sessionHandle   session标识
      * @param operationHandle operation标识
      */
-    private void closeQuietly(String gatewayUrl, String sessionHandle, String operationHandle) {
+    private void closeQuietly(String sessionHandle, String operationHandle) {
         try {
-            if (gatewayUrl != null && !gatewayUrl.isBlank() && sessionHandle != null && operationHandle != null) {
-                closeOperation(gatewayUrl, sessionHandle, operationHandle);
+            if (sessionHandle != null && operationHandle != null) {
+                closeOperation(sessionHandle, operationHandle);
             }
         } catch (Exception e) {
             log.warn("关闭Flink SQL Gateway operation失败: {}", e.getMessage());
         }
         try {
-            if (gatewayUrl != null && !gatewayUrl.isBlank() && sessionHandle != null) {
-                closeSession(gatewayUrl, sessionHandle);
+            if (sessionHandle != null) {
+                closeSession(sessionHandle);
             }
         } catch (Exception e) {
             log.warn("关闭Flink SQL Gateway session失败: {}", e.getMessage());
@@ -383,21 +357,9 @@ public class FlinkRpcClient {
     }
 
     /**
-     * 构造JSON请求体
-     *
-     * @param body 请求体
-     * @return HTTP请求实体
-     */
-    private HttpEntity<Map<String, Object>> jsonEntity(Map<String, Object> body) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        return new HttpEntity<>(body, headers);
-    }
-
-    /**
      * 读取JSON响应
      *
-     * @param body 响应体
+     * @param body  响应体
      * @param clazz 响应类型
      * @return 响应对象
      */
@@ -472,7 +434,7 @@ public class FlinkRpcClient {
     /**
      * 将SQL Gateway行数据规整为前端可直接渲染的Map
      *
-     * @param row 行数据节点
+     * @param row     行数据节点
      * @param columns 列名列表
      * @return 行Map
      */
@@ -502,8 +464,8 @@ public class FlinkRpcClient {
      * 保留已有文本值，缺省时读取JSON字段
      *
      * @param existing 已有文本
-     * @param node JSON节点
-     * @param field 字段名
+     * @param node     JSON节点
+     * @param field    字段名
      * @return 文本值
      */
     private String firstText(String existing, JsonNode node, String field) {
@@ -578,7 +540,7 @@ public class FlinkRpcClient {
      * 添加非空SQL语句
      *
      * @param statements SQL语句列表
-     * @param current 当前SQL片段
+     * @param current    当前SQL片段
      */
     private void addStatement(List<String> statements, StringBuilder current) {
         String statement = current.toString().trim();
@@ -669,7 +631,7 @@ public class FlinkRpcClient {
      * Mock提交Application Mode作业
      *
      * @param jobName 作业名称
-     * @param sql SQL语句
+     * @param sql     SQL语句
      * @return mock结果JSON
      */
     private String mockSubmitApplication(String jobName, String sql) {
