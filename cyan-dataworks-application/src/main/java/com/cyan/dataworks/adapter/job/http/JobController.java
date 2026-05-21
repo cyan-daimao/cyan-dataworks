@@ -99,4 +99,24 @@ public class JobController {
         jobService.delete(id);
         return Response.success();
     }
+
+    /**
+     * 发布作业
+     */
+    @PutMapping("/{id}/publish")
+    public Response<JobDTO> publish(@PathVariable String id) {
+        JobBO bo = jobService.publish(id, UserContextHolder.getCurrentEmployee().getPassport());
+        JobDTO dto = JobAdapterConvert.INSTANCE.toJobDTO(bo);
+        return Response.success(dto);
+    }
+
+    /**
+     * 下线作业
+     */
+    @PutMapping("/{id}/offline")
+    public Response<JobDTO> offline(@PathVariable String id) {
+        JobBO bo = jobService.offline(id, UserContextHolder.getCurrentEmployee().getPassport());
+        JobDTO dto = JobAdapterConvert.INSTANCE.toJobDTO(bo);
+        return Response.success(dto);
+    }
 }

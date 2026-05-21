@@ -6,8 +6,11 @@ import com.cyan.dataworks.adapter.job_instance.http.convert.JobInstanceAdapterCo
 import com.cyan.dataworks.adapter.job_instance.http.dto.JobInstanceDTO;
 import com.cyan.dataworks.application.job_instance.JobInstanceService;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
+import com.cyan.dataworks.application.job_instance.cmd.JobPreviewExecuteCmd;
 import com.cyan.dataworks.domain.job_instance.query.JobInstancePageQuery;
 import com.cyan.dataworks.enums.ExecutionStatus;
+import com.cyan.employee.login.filter.UserContextHolder;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -38,6 +41,26 @@ public class JobInstanceController {
     @PostMapping("/jobs/{jobId}/execute")
     public Response<JobInstanceDTO> execute(@PathVariable String jobId) {
         JobInstanceBO bo = jobInstanceService.execute(jobId);
+        JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toJobInstanceDTO(bo);
+        return Response.success(dto);
+    }
+
+    /**
+     * 临时执行作业，不生成正式实例
+     */
+    @PostMapping("/jobs/execute-preview")
+    public Response<JobInstanceDTO> executePreview(@RequestBody @Valid JobPreviewExecuteCmd cmd) {
+        JobInstanceBO bo = jobInstanceService.executePreview(cmd, UserContextHolder.getCurrentEmployee().getPassport());
+        JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toJobInstanceDTO(bo);
+        return Response.success(dto);
+    }
+
+    /**
+     * 启动正式Application Mode作业
+     */
+    @PostMapping("/jobs/{jobId}/start")
+    public Response<JobInstanceDTO> startApplication(@PathVariable String jobId) {
+        JobInstanceBO bo = jobInstanceService.startApplication(jobId, UserContextHolder.getCurrentEmployee().getPassport());
         JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toJobInstanceDTO(bo);
         return Response.success(dto);
     }

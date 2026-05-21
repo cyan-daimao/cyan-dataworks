@@ -8,6 +8,7 @@ import com.cyan.arch.common.util.JSON;
 import com.cyan.dataworks.application.job_instance.JobInstanceService;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
 import com.cyan.dataworks.application.job_instance.cmd.JobInstanceCmd;
+import com.cyan.dataworks.application.job_instance.cmd.JobPreviewExecuteCmd;
 import com.cyan.dataworks.application.job_instance.convert.JobInstanceAppConvert;
 import com.cyan.dataworks.application.job.runtime.JobExecutionPlanner;
 import com.cyan.dataworks.domain.job.Job;
@@ -17,6 +18,7 @@ import com.cyan.dataworks.domain.job_instance.query.JobInstancePageQuery;
 import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
+import com.cyan.dataworks.enums.NodeType;
 import com.cyan.dataworks.infra.rpc.FlinkRpcClient;
 import com.cyan.datagateway.client.SqlGatewayClient;
 import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
@@ -26,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -89,6 +92,93 @@ public class JobInstanceServiceImpl implements JobInstanceService {
             instance.markFailed(e.getMessage(), System.currentTimeMillis() - startTime, jobInstanceRepository);
         }
 
+        return JobInstanceAppConvert.INSTANCE.toJobInstanceBO(instance);
+    }
+
+    /**
+     * 临时执行作业，不生成正式实例
+     */
+    @Override
+    public JobInstanceBO executePreview(JobPreviewExecuteCmd cmd, String createdBy) {
+        Assert.notNull(cmd, new SilentException("临时执行参数不能为空"));
+
+        Job previewJob = new Job()
+                .setName(cmd.getName() == null || cmd.getName().isBlank() ? "临时任务" : cmd.getName())
+                .setEngineType(cmd.getEngineType())
+                .setNodeType(cmd.getNodeType())
+                .setSqlContent(cmd.getSqlContent())
+                .setConfigJson(cmd.getConfigJson());
+        String executableSql = jobExecutionPlanner.buildExecutableSql(previewJob);
+
+        long startTime = System.currentTimeMillis();
+        JobInstanceBO result = new JobInstanceBO()
+                .setJobId("")
+                .setJobName(previewJob.getName())
+                .setEngineType(previewJob.getEngineType())
+                .setSqlContent(executableSql)
+                .setStatus(ExecutionStatus.RUNNING)
+                .setCreatedBy(createdBy)
+                .setCreatedAt(LocalDateTime.now())
+                .setUpdatedBy(createdBy)
+                .setUpdatedAt(LocalDateTime.now());
+        if (previewJob.getNodeType() == NodeType.ODS_TO_DWD) {
+            return result.setStatus(ExecutionStatus.SUCCESS)
+                    .setResultData(JSON.toJSONString(Map.of(
+                            "previewOnly", true,
+                            "message", "ODS到DWD节点临时运行只做校验和执行计划预览，发布后才会以Application Mode写入DWD"
+                    )))
+                    .setCostTimeMs(System.currentTimeMillis() - startTime);
+        }
+        try {
+            String resultData;
+            if (previewJob.getEngineType() == EngineType.SPARK) {
+                resultData = executeSparkSql(executableSql);
+            } else {
+                resultData = executeFlinkSql(executableSql);
+            }
+            result.setStatus(ExecutionStatus.SUCCESS)
+                    .setResultData(resultData)
+                    .setCostTimeMs(System.currentTimeMillis() - startTime);
+        } catch (Exception e) {
+            result.setStatus(ExecutionStatus.FAILED)
+                    .setErrorMessage(e.getMessage())
+                    .setCostTimeMs(System.currentTimeMillis() - startTime);
+        }
+        return result;
+    }
+
+    /**
+     * 启动正式Application Mode作业
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public JobInstanceBO startApplication(String jobId, String createdBy) {
+        Job job = jobRepository.findById(jobId);
+        Assert.notNull(job, new SilentException("作业不存在"));
+        Assert.isTrue(job.getStatus() == com.cyan.dataworks.enums.TaskStatus.ONLINE, new SilentException("只有已发布作业可启动正式任务"));
+        Assert.isTrue(job.getEngineType() == EngineType.FLINK, new SilentException("当前仅Flink任务支持Application Mode启动"));
+
+        String executableSql = jobExecutionPlanner.buildExecutableSql(job);
+        JobInstanceCmd cmd = new JobInstanceCmd()
+                .setJobId(jobId)
+                .setJobName(job.getName())
+                .setEngineType(job.getEngineType())
+                .setSqlContent(executableSql)
+                .setStatus(ExecutionStatus.RUNNING);
+        JobInstance instance = JobInstanceAppConvert.INSTANCE.toJobInstance(cmd);
+        instance.setCreatedBy(createdBy);
+        instance.setUpdatedBy(createdBy);
+        instance.setCreatedAt(LocalDateTime.now());
+        instance.setUpdatedAt(LocalDateTime.now());
+        instance = instance.save(jobInstanceRepository);
+
+        long startTime = System.currentTimeMillis();
+        try {
+            String resultData = flinkRpcClient.submitApplication(job.getName(), executableSql);
+            instance.markSuccess(resultData, System.currentTimeMillis() - startTime, jobInstanceRepository);
+        } catch (Exception e) {
+            instance.markFailed(e.getMessage(), System.currentTimeMillis() - startTime, jobInstanceRepository);
+        }
         return JobInstanceAppConvert.INSTANCE.toJobInstanceBO(instance);
     }
 

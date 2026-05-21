@@ -26,8 +26,28 @@ public class FlinkProperties {
     @Data
     public static class Rest {
         /**
-         * Flink REST API URL
+         * Flink SQL Gateway REST API URL
          */
         private String url;
+
+        /**
+         * 临时执行结果轮询次数
+         */
+        private Integer previewPollTimes = 10;
+
+        /**
+         * 临时执行结果轮询间隔，单位毫秒
+         */
+        private Integer previewPollIntervalMs = 500;
+
+        /**
+         * 临时执行最多读取结果页数
+         */
+        private Integer previewMaxResultPages = 20;
+
+        /**
+         * 临时执行最多返回结果行数
+         */
+        private Integer previewMaxResultRows = 100;
     }
 }

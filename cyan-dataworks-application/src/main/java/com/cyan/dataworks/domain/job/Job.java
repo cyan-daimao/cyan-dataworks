@@ -128,6 +128,26 @@ public class Job {
     }
 
     /**
+     * 发布作业
+     */
+    public Job publish(JobRepository repository) {
+        Assert.notBlank(this.id, new SilentException("发布时id不能为空"));
+        this.validateDefinition();
+        this.status = TaskStatus.ONLINE;
+        return repository.updateById(this);
+    }
+
+    /**
+     * 下线作业
+     */
+    public Job offline(JobRepository repository) {
+        Assert.notBlank(this.id, new SilentException("下线时id不能为空"));
+        Assert.isTrue(this.status == TaskStatus.ONLINE, new SilentException("只有已上线作业可下线"));
+        this.status = TaskStatus.OFFLINE;
+        return repository.updateById(this);
+    }
+
+    /**
      * 校验作业定义
      */
     public void validateDefinition() {

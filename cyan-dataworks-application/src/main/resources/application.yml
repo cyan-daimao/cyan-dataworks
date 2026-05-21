@@ -13,3 +13,10 @@ management:
   endpoint:
     health:
       show-details: always
+flink:
+  rest:
+    url: http://10.0.0.2:18083
+    preview-poll-times: 10
+    preview-poll-interval-ms: 500
+    preview-max-result-pages: 20
+    preview-max-result-rows: 100

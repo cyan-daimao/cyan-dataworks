@@ -44,4 +44,14 @@ public interface JobService {
      * 删除作业
      */
     void delete(String id);
+
+    /**
+     * 发布作业
+     */
+    JobBO publish(String id, String updatedBy);
+
+    /**
+     * 下线作业
+     */
+    JobBO offline(String id, String updatedBy);
 }

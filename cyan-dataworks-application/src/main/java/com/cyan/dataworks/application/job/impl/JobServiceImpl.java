@@ -112,4 +112,31 @@ public class JobServiceImpl implements JobService {
         jobScheduleRepository.deleteByJobId(id);
         scheduleJobExecutor.cancel(id);
     }
+
+    /**
+     * 发布作业
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public JobBO publish(String id, String updatedBy) {
+        Job existing = jobRepository.findById(id);
+        Assert.notNull(existing, new SilentException("作业不存在"));
+        existing.setUpdatedBy(updatedBy);
+        Job job = existing.publish(jobRepository);
+        return JobAppConvert.INSTANCE.toJobBO(job);
+    }
+
+    /**
+     * 下线作业
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public JobBO offline(String id, String updatedBy) {
+        Job existing = jobRepository.findById(id);
+        Assert.notNull(existing, new SilentException("作业不存在"));
+        existing.setUpdatedBy(updatedBy);
+        Job job = existing.offline(jobRepository);
+        scheduleJobExecutor.cancel(id);
+        return JobAppConvert.INSTANCE.toJobBO(job);
+    }
 }
