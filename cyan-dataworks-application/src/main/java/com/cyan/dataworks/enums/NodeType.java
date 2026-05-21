@@ -14,11 +14,6 @@ import lombok.Getter;
 public enum NodeType {
 
     /**
-     * ODS CDC 流水清洗为 DWD 当前态
-     */
-    ODS_TO_DWD("ODS_TO_DWD", "ODS到DWD清洗"),
-
-    /**
      * SparkSQL 节点
      */
     SPARK_SQL("SPARK_SQL", "SparkSQL"),
@@ -57,13 +52,13 @@ public enum NodeType {
      * 是否是 SQL 类节点
      */
     public boolean isSqlNode() {
-        return this == ODS_TO_DWD || this == SPARK_SQL || this == FLINK_SQL;
+        return this == SPARK_SQL || this == FLINK_SQL;
     }
 
     /**
      * 是否是平台托管输出节点
      */
     public boolean isManagedOutputNode() {
-        return this == ODS_TO_DWD || this == SPARK_SQL || this == FLINK_SQL;
+        return this == SPARK_SQL || this == FLINK_SQL;
     }
 }

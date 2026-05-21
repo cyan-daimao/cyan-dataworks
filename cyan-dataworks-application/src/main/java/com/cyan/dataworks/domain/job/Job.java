@@ -159,10 +159,6 @@ public class Job {
         if (this.nodeType.isSqlNode()) {
             SqlPolicy.assertSelectOnly(this.sqlContent);
         }
-        if (this.nodeType == NodeType.ODS_TO_DWD) {
-            Assert.notBlank(this.configJson, new SilentException("ODS到DWD节点配置不能为空"));
-            Assert.isTrue(this.engineType == EngineType.FLINK, new SilentException("ODS到DWD节点必须使用FlinkSQL引擎"));
-        }
     }
 
     /**
@@ -188,7 +184,7 @@ public class Job {
         if (this.engineType != null || this.nodeType == null) {
             return;
         }
-        if (this.nodeType == NodeType.ODS_TO_DWD || this.nodeType == NodeType.FLINK_SQL) {
+        if (this.nodeType == NodeType.FLINK_SQL) {
             this.engineType = EngineType.FLINK;
             return;
         }

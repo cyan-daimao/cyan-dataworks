@@ -18,7 +18,6 @@ import com.cyan.dataworks.domain.job_instance.query.JobInstancePageQuery;
 import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
-import com.cyan.dataworks.enums.NodeType;
 import com.cyan.dataworks.infra.rpc.FlinkRpcClient;
 import com.cyan.datagateway.client.SqlGatewayClient;
 import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
@@ -28,7 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -121,14 +119,6 @@ public class JobInstanceServiceImpl implements JobInstanceService {
                 .setCreatedAt(LocalDateTime.now())
                 .setUpdatedBy(createdBy)
                 .setUpdatedAt(LocalDateTime.now());
-        if (previewJob.getNodeType() == NodeType.ODS_TO_DWD) {
-            return result.setStatus(ExecutionStatus.SUCCESS)
-                    .setResultData(JSON.toJSONString(Map.of(
-                            "previewOnly", true,
-                            "message", "ODS到DWD节点临时运行只做校验和执行计划预览，发布后才会以Application Mode写入DWD"
-                    )))
-                    .setCostTimeMs(System.currentTimeMillis() - startTime);
-        }
         try {
             String resultData;
             if (previewJob.getEngineType() == EngineType.SPARK) {

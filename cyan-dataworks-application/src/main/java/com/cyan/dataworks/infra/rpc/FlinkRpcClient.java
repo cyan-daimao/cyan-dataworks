@@ -69,13 +69,14 @@ public class FlinkRpcClient {
      */
     public String executeSql(String sql) {
         String gatewayUrl = getGatewayUrl();
-        if (gatewayUrl == null || gatewayUrl.isEmpty()) {
+        if (gatewayUrl.isEmpty()) {
             log.warn("Flink REST URL未配置，返回mock结果");
             return mockExecuteSql(sql);
         }
 
         String sessionHandle = null;
         String operationHandle = null;
+        long startTime = System.currentTimeMillis();
         try {
             sessionHandle = openSession(gatewayUrl);
             List<String> statements = splitStatements(sql);
@@ -103,6 +104,7 @@ public class FlinkRpcClient {
             result.put("sessionHandle", sessionHandle);
             result.put("operationHandle", operationHandle);
             result.put("result", parseJsonOrRaw(lastResult));
+            result.put("durationMs", System.currentTimeMillis() - startTime);
             result.put("statements", executedStatements);
             return objectMapper.writeValueAsString(result);
         } catch (Exception e) {
@@ -220,7 +222,8 @@ public class FlinkRpcClient {
                 + "/operations/" + encode(operationHandle)
                 + "/result/0?rowFormat=JSON";
         List<Object> data = new ArrayList<>();
-        Object columns = List.of();
+        List<String> columnNames = new ArrayList<>();
+        Object rawColumns = List.of();
         List<Object> pages = new ArrayList<>();
         String resultKind = "";
         String jobId = "";
@@ -241,7 +244,8 @@ public class FlinkRpcClient {
             JsonNode results = page.get("results");
             if (results != null) {
                 if (results.has("columns")) {
-                    columns = objectMapper.convertValue(results.get("columns"), Object.class);
+                    rawColumns = objectMapper.convertValue(results.get("columns"), Object.class);
+                    columnNames = normalizeColumnNames(results.get("columns"));
                 }
                 JsonNode rows = results.get("data");
                 if (rows != null && rows.isArray()) {
@@ -249,7 +253,7 @@ public class FlinkRpcClient {
                         if (data.size() >= getPreviewMaxResultRows()) {
                             break;
                         }
-                        data.add(objectMapper.convertValue(row, Object.class));
+                        data.add(normalizeRow(row, columnNames));
                     }
                 }
             }
@@ -267,9 +271,12 @@ public class FlinkRpcClient {
         result.put("isQueryResult", true);
         result.put("jobID", jobId);
         result.put("resultKind", resultKind);
+        result.put("columns", columnNames);
+        result.put("rows", data);
+        result.put("total", data.size());
         result.put("maxRowsReached", data.size() >= getPreviewMaxResultRows());
         result.put("results", Map.of(
-                "columns", columns,
+                "columns", rawColumns,
                 "rowFormat", "JSON",
                 "data", data
         ));
@@ -434,6 +441,61 @@ public class FlinkRpcClient {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * 从SQL Gateway列元数据中提取前端展示列名
+     *
+     * @param columns 列元数据节点
+     * @return 列名列表
+     */
+    private List<String> normalizeColumnNames(JsonNode columns) {
+        List<String> names = new ArrayList<>();
+        if (columns == null || !columns.isArray()) {
+            return names;
+        }
+        int index = 0;
+        for (JsonNode column : columns) {
+            String name = column.path("name").asText("");
+            if (name.isBlank()) {
+                name = column.path("columnName").asText("");
+            }
+            if (name.isBlank()) {
+                name = "col_" + index;
+            }
+            names.add(name);
+            index++;
+        }
+        return names;
+    }
+
+    /**
+     * 将SQL Gateway行数据规整为前端可直接渲染的Map
+     *
+     * @param row 行数据节点
+     * @param columns 列名列表
+     * @return 行Map
+     */
+    private Map<String, Object> normalizeRow(JsonNode row, List<String> columns) {
+        Map<String, Object> normalized = new LinkedHashMap<>();
+        JsonNode fields = row.has("fields") ? row.get("fields") : row;
+        if (fields != null && fields.isArray()) {
+            int index = 0;
+            for (JsonNode field : fields) {
+                String column = index < columns.size() ? columns.get(index) : "col_" + index;
+                normalized.put(column, objectMapper.convertValue(field, Object.class));
+                index++;
+            }
+            return normalized;
+        }
+        if (fields != null && fields.isObject()) {
+            fields.fields().forEachRemaining(entry ->
+                    normalized.put(entry.getKey(), objectMapper.convertValue(entry.getValue(), Object.class)));
+            return normalized;
+        }
+        String column = columns.isEmpty() ? "result" : columns.get(0);
+        normalized.put(column, fields == null ? null : objectMapper.convertValue(fields, Object.class));
+        return normalized;
     }
 
     /**
