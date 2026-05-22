@@ -15,7 +15,7 @@ import java.util.Map;
  * @author cy.Y
  * @since 1.0.0
  */
-@FeignClient(name = "flink-gateway")
+@FeignClient(name = "flink-gateway", contextId = "flinkRpcClient", url = "${feign.flink-gateway.url:}")
 public interface FlinkRpcClient {
 
     /**
