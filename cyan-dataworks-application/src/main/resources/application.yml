@@ -20,3 +20,10 @@ flink:
     preview-poll-interval-ms: 500
     preview-max-result-pages: 20
     preview-max-result-rows: 100
+  operator:
+    enabled: true
+    namespace: flink
+    image: harbor.cyan.com/cyan/flink-sql:2.0.1
+    jar-uri: local:///opt/flink/lib/sql-runner.jar
+    entry-class: com.cyan.dataman.infra.flink.SqlRunner
+    parallelism: 1

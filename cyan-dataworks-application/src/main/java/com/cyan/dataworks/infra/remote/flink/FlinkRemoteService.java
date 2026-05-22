@@ -4,6 +4,9 @@ import com.cyan.arch.common.api.SilentException;
 import com.cyan.arch.common.util.JSON;
 import com.cyan.dataworks.infra.config.FlinkProperties;
 import com.cyan.dataworks.infra.remote.flink.client.FlinkRpcClient;
+import com.cyan.dataworks.infra.remote.flink.operator.FlinkApplicationOperatorService;
+import com.cyan.dataworks.infra.remote.flink.operator.bo.FlinkApplicationBO;
+import com.cyan.dataworks.infra.remote.flink.operator.cmd.FlinkApplicationSubmitCmd;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,16 +52,25 @@ public class FlinkRemoteService {
     private final FlinkRpcClient flinkRpcClient;
 
     /**
+     * Flink Kubernetes Operator 服务
+     */
+    private final FlinkApplicationOperatorService flinkApplicationOperatorService;
+
+    /**
      * 创建Flink SQL Gateway远程服务
      *
-     * @param objectMapper     JSON解析器
-     * @param flinkProperties  Flink配置属性
-     * @param flinkRpcClient   Flink Gateway Feign 客户端
+     * @param objectMapper                  JSON解析器
+     * @param flinkProperties               Flink配置属性
+     * @param flinkRpcClient                Flink Gateway Feign 客户端
+     * @param flinkApplicationOperatorService Flink Kubernetes Operator 服务
      */
-    public FlinkRemoteService(ObjectMapper objectMapper, FlinkProperties flinkProperties, FlinkRpcClient flinkRpcClient) {
+    public FlinkRemoteService(ObjectMapper objectMapper, FlinkProperties flinkProperties,
+                              FlinkRpcClient flinkRpcClient,
+                              FlinkApplicationOperatorService flinkApplicationOperatorService) {
         this.objectMapper = objectMapper;
         this.flinkProperties = flinkProperties;
         this.flinkRpcClient = flinkRpcClient;
+        this.flinkApplicationOperatorService = flinkApplicationOperatorService;
     }
 
     /**
@@ -123,13 +135,26 @@ public class FlinkRemoteService {
      * @return 提交结果JSON
      */
     public String submitApplication(String jobName, String sql) {
-        if (getGatewayUrl() == null || getGatewayUrl().isEmpty()) {
-            log.warn("Flink REST URL未配置，返回Application Mode mock结果");
-            return mockSubmitApplication(jobName, sql);
-        }
-        // TODO 对接 Flink Kubernetes Operator 或 application cluster 提交流程。
-        log.warn("Application Mode提交尚未接入真实集群，返回mock结果");
-        return mockSubmitApplication(jobName, sql);
+        String deploymentName = toTrackingDeploymentName(jobName);
+        String configMapName = deploymentName + "-sql";
+
+        FlinkApplicationSubmitCmd cmd = new FlinkApplicationSubmitCmd()
+                .setJobName(jobName)
+                .setDeploymentName(deploymentName)
+                .setConfigMapName(configMapName)
+                .setSql(sql);
+
+        FlinkApplicationBO result = flinkApplicationOperatorService.submit(cmd);
+
+        Map<String, Object> resultMap = new LinkedHashMap<>();
+        resultMap.put("mock", false);
+        resultMap.put("mode", "APPLICATION");
+        resultMap.put("deploymentName", result.getDeploymentName());
+        resultMap.put("configMapName", result.getConfigMapName());
+        resultMap.put("namespace", result.getNamespace());
+        resultMap.put("status", result.getStatus());
+        resultMap.put("message", result.getMessage());
+        return JSON.toJSONString(resultMap);
     }
 
     /**
@@ -643,6 +668,41 @@ public class FlinkRemoteService {
                 "message", "Flink Application Mode提交能力尚未接入真实集群"
         );
         return JSON.toJSONString(result);
+    }
+
+    /**
+     * 将名称转换为 RFC 1123 兼容格式（用于 K8s 资源命名）
+     *
+     * @param name 原始名称
+     * @return RFC 1123 兼容名称
+     */
+    private String toK8sName(String name) {
+        String normalized = name.toLowerCase()
+                .replaceAll("[^a-z0-9-]", "-")
+                .replaceAll("-+", "-")
+                .replaceAll("^-", "")
+                .replaceAll("-$", "");
+        return normalized.isBlank() ? "flink-application" : normalized;
+    }
+
+    /**
+     * 生成采集链路 FlinkDeployment 名称
+     *
+     * @param jobName 作业名称
+     * @return FlinkDeployment 名称
+     */
+    private String toTrackingDeploymentName(String jobName) {
+        String normalized = toK8sName(jobName);
+        if (normalized.startsWith("tracking-") && normalized.endsWith("-pipeline")) {
+            return normalized;
+        }
+        if (normalized.startsWith("tracking-")) {
+            return normalized + "-pipeline";
+        }
+        if (normalized.endsWith("-pipeline")) {
+            return "tracking-" + normalized;
+        }
+        return "tracking-" + normalized + "-pipeline";
     }
 
     /**

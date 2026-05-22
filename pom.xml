@@ -23,6 +23,7 @@
         <lombok.version>1.18.42</lombok.version>
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
+        <fabric8.version>6.13.4</fabric8.version>
     </properties>
 
     <dependencyManagement>
@@ -68,6 +69,11 @@
                 <groupId>org.mapstruct</groupId>
                 <artifactId>mapstruct</artifactId>
                 <version>${mapstruct.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.fabric8</groupId>
+                <artifactId>kubernetes-client</artifactId>
+                <version>${fabric8.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
