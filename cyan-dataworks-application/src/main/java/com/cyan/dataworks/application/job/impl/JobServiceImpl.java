@@ -15,6 +15,7 @@ import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
 import com.cyan.dataworks.domain.job_instance.JobInstance;
 import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
 import com.cyan.dataworks.enums.EngineType;
+import com.cyan.dataworks.enums.ExecutionStatus;
 import com.cyan.dataworks.infra.remote.flink.FlinkRemoteService;
 import com.cyan.dataworks.infra.remote.flink.operator.FlinkApplicationOperatorService;
 import com.cyan.dataworks.infra.schedule.ScheduleJobExecutor;
@@ -24,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -161,26 +163,29 @@ public class JobServiceImpl implements JobService {
             return;
         }
         try {
-            JobInstance latestInstance = jobInstanceRepository.findLatestByJobId(job.getId());
-            if (latestInstance == null || latestInstance.getResultData() == null) {
-                return;
-            }
-            String deploymentName = parseDeploymentName(latestInstance.getResultData());
-            if (deploymentName == null || deploymentName.isBlank()) {
-                return;
-            }
-            // 确认 K8s 上仍存在该 Deployment
-            if (flinkApplicationOperatorService.get(deploymentName) == null) {
-                log.info("Flink Job {} 无运行中的 FlinkDeployment，跳过同步", job.getId());
-                return;
-            }
-            String configMapName = deploymentName + "-sql";
-            // 1. 删除旧 K8s 资源
-            flinkApplicationOperatorService.delete(deploymentName, configMapName);
-            // 2. 用最新 SQL 重新提交
+            cleanupFlinkApplicationAndInstances(job);
             String executableSql = jobExecutionPlanner.buildExecutableSql(job);
-            flinkRemoteService.submitApplication(job.getName(), executableSql);
-            log.info("Flink Job {} 发布成功，已同步更新 K8s Application: {}", job.getId(), deploymentName);
+            JobInstance instance = new JobInstance()
+                    .setJobId(job.getId())
+                    .setJobName(job.getName())
+                    .setEngineType(job.getEngineType())
+                    .setSqlContent(executableSql)
+                    .setStatus(ExecutionStatus.RUNNING)
+                    .setCreatedBy(job.getUpdatedBy())
+                    .setUpdatedBy(job.getUpdatedBy())
+                    .setCreatedAt(LocalDateTime.now())
+                    .setUpdatedAt(LocalDateTime.now());
+            instance = instance.save(jobInstanceRepository);
+            long startTime = System.currentTimeMillis();
+            try {
+                String resultData = flinkRemoteService.submitApplication(job.getId(), job.getName(), executableSql);
+                bindApplicationInfo(instance, resultData);
+                instance.markSuccess(resultData, System.currentTimeMillis() - startTime, jobInstanceRepository);
+                log.info("Flink Job {} 发布成功，已创建 K8s Application: {}", job.getId(), instance.getApplicationName());
+            } catch (Exception e) {
+                instance.markFailed(e.getMessage(), System.currentTimeMillis() - startTime, jobInstanceRepository);
+                throw e;
+            }
         } catch (Exception e) {
             log.error("Flink Job {} 同步 K8s Application 失败: {}", job.getId(), e.getMessage(), e);
             // 不抛异常，避免影响发布操作本身
@@ -201,6 +206,74 @@ public class JobServiceImpl implements JobService {
     }
 
     /**
+     * 从实例中解析Deployment名称
+     */
+    private String parseDeploymentName(JobInstance instance) {
+        if (instance == null) {
+            return "";
+        }
+        return Optional.ofNullable(instance.getApplicationName())
+                .filter(value -> !value.isBlank())
+                .orElseGet(() -> parseDeploymentName(instance.getResultData()));
+    }
+
+    /**
+     * 从实例中解析ConfigMap名称
+     */
+    private String parseConfigMapName(JobInstance instance, String deploymentName) {
+        return Optional.ofNullable(instance)
+                .map(JobInstance::getConfigMapName)
+                .filter(value -> !value.isBlank())
+                .orElse(deploymentName == null || deploymentName.isBlank() ? "" : deploymentName + "-sql");
+    }
+
+    /**
+     * 清理Flink Application和历史实例
+     */
+    private void cleanupFlinkApplicationAndInstances(Job job) {
+        JobInstance latestInstance = jobInstanceRepository.findLatestByJobId(job.getId());
+        String deploymentName = parseDeploymentName(latestInstance);
+        if (deploymentName != null && !deploymentName.isBlank()) {
+            String configMapName = parseConfigMapName(latestInstance, deploymentName);
+            flinkApplicationOperatorService.delete(deploymentName, configMapName);
+            log.info("Flink Job {} 发布前已清理旧 K8s Application: {}", job.getId(), deploymentName);
+        }
+        jobInstanceRepository.deleteByJobId(job.getId());
+    }
+
+    /**
+     * 绑定Application信息
+     */
+    private void bindApplicationInfo(JobInstance instance, String resultData) {
+        try {
+            JsonNode node = objectMapper.readTree(resultData);
+            instance.bindFlinkApplication(
+                    node.path("deploymentName").asText(""),
+                    node.path("namespace").asText(""),
+                    node.path("configMapName").asText(""),
+                    node.path("jobManagerPodName").asText(""),
+                    stringify(node.get("taskManagerPodNames"))
+            );
+        } catch (Exception e) {
+            log.warn("绑定Flink Application信息失败: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * JSON节点序列化
+     */
+    private String stringify(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return "[]";
+        }
+        try {
+            return objectMapper.writeValueAsString(node);
+        } catch (Exception e) {
+            return "[]";
+        }
+    }
+
+    /**
      * Flink Job 下线/删除时，清理对应的 K8s Application
      */
     private void deleteFlinkApplicationIfNeeded(Job job) {
@@ -212,11 +285,11 @@ public class JobServiceImpl implements JobService {
             if (latestInstance == null || latestInstance.getResultData() == null) {
                 return;
             }
-            String deploymentName = parseDeploymentName(latestInstance.getResultData());
+            String deploymentName = parseDeploymentName(latestInstance);
             if (deploymentName == null || deploymentName.isBlank()) {
                 return;
             }
-            String configMapName = deploymentName + "-sql";
+            String configMapName = parseConfigMapName(latestInstance, deploymentName);
             flinkApplicationOperatorService.delete(deploymentName, configMapName);
             log.info("Flink Job {} 下线/删除，已清理 K8s Application: {}", job.getId(), deploymentName);
         } catch (Exception e) {

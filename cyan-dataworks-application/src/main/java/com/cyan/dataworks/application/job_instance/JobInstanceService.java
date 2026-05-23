@@ -2,7 +2,9 @@ package com.cyan.dataworks.application.job_instance;
 
 import com.cyan.arch.common.api.Page;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
+import com.cyan.dataworks.application.job_instance.bo.JobInstanceLogBO;
 import com.cyan.dataworks.application.job_instance.cmd.JobPreviewExecuteCmd;
+import com.cyan.dataworks.domain.job_instance.query.JobInstanceLogQuery;
 import com.cyan.dataworks.domain.job_instance.query.JobInstancePageQuery;
 
 /**
@@ -47,4 +49,9 @@ public interface JobInstanceService {
      * 根据ID查询实例
      */
     JobInstanceBO findById(String id);
+
+    /**
+     * 查询实例K8s Pod日志
+     */
+    JobInstanceLogBO getLogs(String id, JobInstanceLogQuery query);
 }

@@ -78,6 +78,16 @@ public class JobInstanceRepositoryImpl implements JobInstanceRepository {
     }
 
     /**
+     * 根据作业ID删除实例
+     */
+    @Override
+    public void deleteByJobId(String jobId) {
+        LambdaQueryWrapper<JobInstanceDO> wrapper = new LambdaQueryWrapper<JobInstanceDO>()
+                .eq(JobInstanceDO::getJobId, com.cyan.arch.common.util.Convert.toLong(jobId));
+        jobInstanceMapper.delete(wrapper);
+    }
+
+    /**
      * 根据作业ID查询最近一个实例
      */
     @Override

@@ -67,6 +67,31 @@ public class JobInstanceDTO {
     private String errorMessage;
 
     /**
+     * Flink Application名称
+     */
+    private String applicationName;
+
+    /**
+     * Flink Application命名空间
+     */
+    private String applicationNamespace;
+
+    /**
+     * Flink ConfigMap名称
+     */
+    private String configMapName;
+
+    /**
+     * JobManager Pod名称
+     */
+    private String jobManagerPodName;
+
+    /**
+     * TaskManager Pod名称列表（JSON）
+     */
+    private String taskManagerPodNames;
+
+    /**
      * 创建人
      */
     private String createdBy;

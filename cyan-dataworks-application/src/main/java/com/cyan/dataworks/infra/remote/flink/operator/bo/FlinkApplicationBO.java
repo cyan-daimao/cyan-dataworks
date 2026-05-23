@@ -41,4 +41,14 @@ public class FlinkApplicationBO {
      * 消息
      */
     private String message;
+
+    /**
+     * JobManager Pod名称
+     */
+    private String jobManagerPodName;
+
+    /**
+     * TaskManager Pod名称列表
+     */
+    private java.util.List<String> taskManagerPodNames;
 }

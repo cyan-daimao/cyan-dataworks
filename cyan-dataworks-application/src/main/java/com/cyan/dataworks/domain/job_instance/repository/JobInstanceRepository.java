@@ -33,6 +33,11 @@ public interface JobInstanceRepository {
     JobInstance updateById(JobInstance jobInstance);
 
     /**
+     * 根据作业ID删除实例
+     */
+    void deleteByJobId(String jobId);
+
+    /**
      * 根据作业ID查询最近一个实例
      *
      * @param jobId 作业ID

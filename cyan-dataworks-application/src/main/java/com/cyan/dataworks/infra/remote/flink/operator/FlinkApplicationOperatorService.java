@@ -1,11 +1,15 @@
 package com.cyan.dataworks.infra.remote.flink.operator;
 
 import com.cyan.arch.common.api.SilentException;
+import com.cyan.dataworks.enums.JobLogRole;
 import com.cyan.dataworks.infra.remote.flink.operator.bo.FlinkApplicationBO;
+import com.cyan.dataworks.infra.remote.flink.operator.bo.FlinkPodLogBO;
 import com.cyan.dataworks.infra.remote.flink.operator.cmd.FlinkApplicationSubmitCmd;
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.ConfigMapBuilder;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResource;
+import io.fabric8.kubernetes.api.model.Pod;
+import io.fabric8.kubernetes.client.dsl.ContainerResource;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +17,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * Flink Kubernetes Operator Application 模式提交服务
@@ -78,12 +87,15 @@ public class FlinkApplicationOperatorService {
                     .createOrReplace();
             log.info("FlinkDeployment 创建/更新成功: {} in namespace {}", deploymentName, namespace);
 
+            List<Pod> pods = waitApplicationPods(deploymentName, namespace);
             return new FlinkApplicationBO()
                     .setDeploymentName(deploymentName)
                     .setConfigMapName(configMapName)
                     .setNamespace(namespace)
                     .setStatus("RUNNING")
-                    .setMessage("Flink Application 提交成功");
+                    .setMessage("Flink Application 提交成功")
+                    .setJobManagerPodName(findJobManagerPodName(pods))
+                    .setTaskManagerPodNames(findTaskManagerPodNames(pods));
         } catch (Exception e) {
             log.error("Flink Application 提交失败: {}", deploymentName, e);
             throw new SilentException("Flink Application 提交失败: " + e.getMessage());
@@ -133,6 +145,184 @@ public class FlinkApplicationOperatorService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * 查询Flink Application Pod日志
+     *
+     * @param deploymentName FlinkDeployment名称
+     * @param namespace      命名空间
+     * @param role           日志角色
+     * @param tailLines      尾部行数
+     * @param previous       是否读取上一个已终止容器日志
+     * @return Pod日志列表
+     */
+    public List<FlinkPodLogBO> getPodLogs(String deploymentName,
+                                          String namespace,
+                                          JobLogRole role,
+                                          int tailLines,
+                                          boolean previous) {
+        String actualNamespace = namespace == null || namespace.isBlank() ? defaultNamespace : namespace;
+        List<Pod> matchedPods = findApplicationPods(deploymentName, actualNamespace);
+
+        return matchedPods.stream()
+                .map(pod -> toPodLog(pod, actualNamespace, tailLines, previous))
+                .filter(podLog -> role == null || role == JobLogRole.ALL || podLog.getRole() == role)
+                .sorted(Comparator.comparing(FlinkPodLogBO::getRole).thenComparing(FlinkPodLogBO::getPodName))
+                .toList();
+    }
+
+    /**
+     * 查询JobManager Pod名称
+     */
+    public String findJobManagerPodName(String deploymentName, String namespace) {
+        String actualNamespace = namespace == null || namespace.isBlank() ? defaultNamespace : namespace;
+        return findJobManagerPodName(findApplicationPods(deploymentName, actualNamespace));
+    }
+
+    /**
+     * 查询JobManager Pod名称
+     */
+    private String findJobManagerPodName(List<Pod> pods) {
+        return pods.stream()
+                .filter(pod -> resolvePodRole(pod) == JobLogRole.JOB_MANAGER)
+                .findFirst()
+                .map(this::resolvePodName)
+                .orElse("");
+    }
+
+    /**
+     * 查询TaskManager Pod名称列表
+     */
+    public List<String> findTaskManagerPodNames(String deploymentName, String namespace) {
+        String actualNamespace = namespace == null || namespace.isBlank() ? defaultNamespace : namespace;
+        return findTaskManagerPodNames(findApplicationPods(deploymentName, actualNamespace));
+    }
+
+    /**
+     * 查询TaskManager Pod名称列表
+     */
+    private List<String> findTaskManagerPodNames(List<Pod> pods) {
+        return pods.stream()
+                .filter(pod -> resolvePodRole(pod) == JobLogRole.TASK_MANAGER)
+                .map(this::resolvePodName)
+                .toList();
+    }
+
+    /**
+     * 等待Application关联Pod创建
+     */
+    private List<Pod> waitApplicationPods(String deploymentName, String namespace) {
+        for (int i = 0; i < 10; i++) {
+            List<Pod> pods = findApplicationPods(deploymentName, namespace);
+            if (!pods.isEmpty()) {
+                return pods;
+            }
+            try {
+                Thread.sleep(1000L);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return List.of();
+            }
+        }
+        return List.of();
+    }
+
+    /**
+     * 查询Application关联Pod
+     */
+    private List<Pod> findApplicationPods(String deploymentName, String namespace) {
+        List<Pod> pods = Optional.ofNullable(k8sClient.pods().inNamespace(namespace).list().getItems())
+                .orElse(List.of());
+
+        List<Pod> matchedPods = pods.stream()
+                .filter(pod -> matchByLabels(pod, deploymentName))
+                .toList();
+        if (!matchedPods.isEmpty()) {
+            return matchedPods;
+        }
+        return pods.stream()
+                .filter(pod -> resolvePodName(pod).startsWith(deploymentName))
+                .toList();
+    }
+
+    /**
+     * 通过标签匹配FlinkDeployment关联Pod
+     */
+    private boolean matchByLabels(Pod pod, String deploymentName) {
+        Map<String, String> labels = Optional.ofNullable(pod.getMetadata())
+                .map(metadata -> metadata.getLabels())
+                .orElse(Map.of());
+        return labels.values().stream().anyMatch(value -> value != null && value.contains(deploymentName));
+    }
+
+    /**
+     * 转换Pod日志
+     */
+    private FlinkPodLogBO toPodLog(Pod pod, String namespace, int tailLines, boolean previous) {
+        String podName = resolvePodName(pod);
+        JobLogRole podRole = resolvePodRole(pod);
+        String containerName = resolveContainerName(pod);
+        String logContent;
+        try {
+            ContainerResource container = k8sClient.pods()
+                    .inNamespace(namespace)
+                    .withName(podName)
+                    .inContainer(containerName);
+            logContent = previous
+                    ? container.terminated().tailingLines(tailLines).getLog()
+                    : container.tailingLines(tailLines).getLog();
+        } catch (Exception e) {
+            log.warn("读取Flink Pod日志失败: pod={}, container={}, error={}", podName, containerName, e.getMessage());
+            logContent = "读取Pod日志失败: " + e.getMessage();
+        }
+        return new FlinkPodLogBO()
+                .setPodName(podName)
+                .setRole(podRole)
+                .setContainerName(containerName)
+                .setLog(logContent == null ? "" : logContent);
+    }
+
+    /**
+     * 解析Pod名称
+     */
+    private String resolvePodName(Pod pod) {
+        return Optional.ofNullable(pod.getMetadata()).map(metadata -> metadata.getName()).orElse("");
+    }
+
+    /**
+     * 识别Pod角色
+     */
+    private JobLogRole resolvePodRole(Pod pod) {
+        String haystack = (Optional.ofNullable(pod.getMetadata()).map(metadata -> metadata.getName()).orElse("")
+                + " "
+                + Optional.ofNullable(pod.getMetadata()).map(metadata -> metadata.getLabels()).orElse(Map.of()))
+                .toLowerCase(Locale.ROOT);
+        if (haystack.contains("taskmanager")) {
+            return JobLogRole.TASK_MANAGER;
+        }
+        return JobLogRole.JOB_MANAGER;
+    }
+
+    /**
+     * 解析容器名称
+     */
+    private String resolveContainerName(Pod pod) {
+        boolean hasMainContainer = Optional.ofNullable(pod.getSpec())
+                .map(spec -> spec.getContainers())
+                .orElse(List.of())
+                .stream()
+                .anyMatch(container -> "flink-main-container".equals(container.getName()));
+        if (hasMainContainer) {
+            return "flink-main-container";
+        }
+        return Optional.ofNullable(pod.getSpec())
+                .map(spec -> spec.getContainers())
+                .orElse(List.of())
+                .stream()
+                .findFirst()
+                .map(container -> container.getName())
+                .orElse("flink-main-container");
     }
 
     private void createOrUpdateConfigMap(String name, String sql, String namespace) {

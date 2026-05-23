@@ -3,9 +3,11 @@ package com.cyan.dataworks.infra.remote.flink;
 import com.cyan.arch.common.api.SilentException;
 import com.cyan.arch.common.util.JSON;
 import com.cyan.dataworks.infra.config.FlinkProperties;
+import com.cyan.dataworks.enums.JobLogRole;
 import com.cyan.dataworks.infra.remote.flink.client.FlinkRpcClient;
 import com.cyan.dataworks.infra.remote.flink.operator.FlinkApplicationOperatorService;
 import com.cyan.dataworks.infra.remote.flink.operator.bo.FlinkApplicationBO;
+import com.cyan.dataworks.infra.remote.flink.operator.bo.FlinkPodLogBO;
 import com.cyan.dataworks.infra.remote.flink.operator.cmd.FlinkApplicationSubmitCmd;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -134,8 +136,8 @@ public class FlinkRemoteService {
      * @param sql     SQL语句
      * @return 提交结果JSON
      */
-    public String submitApplication(String jobName, String sql) {
-        String deploymentName = toTrackingDeploymentName(jobName);
+    public String submitApplication(String jobId, String jobName, String sql) {
+        String deploymentName = toTrackingDeploymentName(jobId);
         String configMapName = deploymentName + "-sql";
 
         FlinkApplicationSubmitCmd cmd = new FlinkApplicationSubmitCmd()
@@ -154,7 +156,37 @@ public class FlinkRemoteService {
         resultMap.put("namespace", result.getNamespace());
         resultMap.put("status", result.getStatus());
         resultMap.put("message", result.getMessage());
+        resultMap.put("jobManagerPodName", result.getJobManagerPodName());
+        resultMap.put("taskManagerPodNames", Optional.ofNullable(result.getTaskManagerPodNames()).orElse(List.of()));
         return JSON.toJSONString(resultMap);
+    }
+
+    /**
+     * 查询Application Mode作业Pod日志
+     *
+     * @param deploymentName FlinkDeployment名称
+     * @param namespace      命名空间
+     * @param role           日志角色
+     * @param tailLines      尾部行数
+     * @param previous       是否读取上一个已终止容器日志
+     * @return Pod日志列表
+     */
+    public List<FlinkPodLogBO> getApplicationPodLogs(String deploymentName,
+                                                     String namespace,
+                                                     JobLogRole role,
+                                                     int tailLines,
+                                                     boolean previous) {
+        return flinkApplicationOperatorService.getPodLogs(deploymentName, namespace, role, tailLines, previous);
+    }
+
+    /**
+     * 删除Application Mode作业
+     *
+     * @param deploymentName FlinkDeployment名称
+     * @param configMapName  ConfigMap名称
+     */
+    public void deleteApplication(String deploymentName, String configMapName) {
+        flinkApplicationOperatorService.delete(deploymentName, configMapName);
     }
 
     /**
@@ -688,21 +720,11 @@ public class FlinkRemoteService {
     /**
      * 生成采集链路 FlinkDeployment 名称
      *
-     * @param jobName 作业名称
+     * @param jobKey 作业标识
      * @return FlinkDeployment 名称
      */
-    private String toTrackingDeploymentName(String jobName) {
-        String normalized = toK8sName(jobName);
-        if (normalized.startsWith("tracking-") && normalized.endsWith("-pipeline")) {
-            return normalized;
-        }
-        if (normalized.startsWith("tracking-")) {
-            return normalized + "-pipeline";
-        }
-        if (normalized.endsWith("-pipeline")) {
-            return "tracking-" + normalized;
-        }
-        return "tracking-" + normalized + "-pipeline";
+    private String toTrackingDeploymentName(String jobKey) {
+        return "dataworks-flink-job-" + toK8sName(jobKey);
     }
 
     /**

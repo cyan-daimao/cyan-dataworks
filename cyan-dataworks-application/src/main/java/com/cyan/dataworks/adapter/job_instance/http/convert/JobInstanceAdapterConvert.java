@@ -2,7 +2,9 @@ package com.cyan.dataworks.adapter.job_instance.http.convert;
 
 import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.dataworks.adapter.job_instance.http.dto.JobInstanceDTO;
+import com.cyan.dataworks.adapter.job_instance.http.dto.JobInstanceLogDTO;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
+import com.cyan.dataworks.application.job_instance.bo.JobInstanceLogBO;
 import org.mapstruct.Mapper;
 import org.mapstruct.factory.Mappers;
 
@@ -21,4 +23,9 @@ public interface JobInstanceAdapterConvert {
      * BO 转 DTO
      */
     JobInstanceDTO toJobInstanceDTO(JobInstanceBO jobInstanceBO);
+
+    /**
+     * 日志BO 转 DTO
+     */
+    JobInstanceLogDTO toJobInstanceLogDTO(JobInstanceLogBO jobInstanceLogBO);
 }

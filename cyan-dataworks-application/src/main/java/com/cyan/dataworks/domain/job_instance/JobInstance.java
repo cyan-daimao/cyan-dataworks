@@ -76,6 +76,31 @@ public class JobInstance {
     private String errorMessage;
 
     /**
+     * Flink Application名称
+     */
+    private String applicationName;
+
+    /**
+     * Flink Application命名空间
+     */
+    private String applicationNamespace;
+
+    /**
+     * Flink ConfigMap名称
+     */
+    private String configMapName;
+
+    /**
+     * JobManager Pod名称
+     */
+    private String jobManagerPodName;
+
+    /**
+     * TaskManager Pod名称列表（JSON）
+     */
+    private String taskManagerPodNames;
+
+    /**
      * 创建人
      */
     private String createdBy;
@@ -152,5 +177,21 @@ public class JobInstance {
         this.status = ExecutionStatus.FAILED;
         this.errorMessage = "用户手动终止";
         return repository.updateById(this);
+    }
+
+    /**
+     * 绑定Flink Application运行信息
+     */
+    public JobInstance bindFlinkApplication(String applicationName,
+                                            String applicationNamespace,
+                                            String configMapName,
+                                            String jobManagerPodName,
+                                            String taskManagerPodNames) {
+        this.applicationName = applicationName;
+        this.applicationNamespace = applicationNamespace;
+        this.configMapName = configMapName;
+        this.jobManagerPodName = jobManagerPodName;
+        this.taskManagerPodNames = taskManagerPodNames;
+        return this;
     }
 }

@@ -82,6 +82,36 @@ public class JobInstanceDO {
     private String errorMessage;
 
     /**
+     * Flink Application名称
+     */
+    @TableField(value = "application_name")
+    private String applicationName;
+
+    /**
+     * Flink Application命名空间
+     */
+    @TableField(value = "application_namespace")
+    private String applicationNamespace;
+
+    /**
+     * Flink ConfigMap名称
+     */
+    @TableField(value = "config_map_name")
+    private String configMapName;
+
+    /**
+     * JobManager Pod名称
+     */
+    @TableField(value = "job_manager_pod_name")
+    private String jobManagerPodName;
+
+    /**
+     * TaskManager Pod名称列表（JSON）
+     */
+    @TableField(value = "task_manager_pod_names")
+    private String taskManagerPodNames;
+
+    /**
      * 创建人
      */
     @TableField(value = "created_by")

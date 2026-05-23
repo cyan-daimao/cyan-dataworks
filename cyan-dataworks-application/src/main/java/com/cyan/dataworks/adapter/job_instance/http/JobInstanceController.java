@@ -4,11 +4,15 @@ import com.cyan.arch.common.api.Page;
 import com.cyan.arch.common.api.Response;
 import com.cyan.dataworks.adapter.job_instance.http.convert.JobInstanceAdapterConvert;
 import com.cyan.dataworks.adapter.job_instance.http.dto.JobInstanceDTO;
+import com.cyan.dataworks.adapter.job_instance.http.dto.JobInstanceLogDTO;
 import com.cyan.dataworks.application.job_instance.JobInstanceService;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
+import com.cyan.dataworks.application.job_instance.bo.JobInstanceLogBO;
 import com.cyan.dataworks.application.job_instance.cmd.JobPreviewExecuteCmd;
+import com.cyan.dataworks.domain.job_instance.query.JobInstanceLogQuery;
 import com.cyan.dataworks.domain.job_instance.query.JobInstancePageQuery;
 import com.cyan.dataworks.enums.ExecutionStatus;
+import com.cyan.dataworks.enums.JobLogRole;
 import com.cyan.employee.login.filter.UserContextHolder;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -114,6 +118,23 @@ public class JobInstanceController {
     public Response<JobInstanceDTO> findById(@PathVariable String id) {
         JobInstanceBO bo = jobInstanceService.findById(id);
         JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toJobInstanceDTO(bo);
+        return Response.success(dto);
+    }
+
+    /**
+     * 查询实例K8s Pod日志
+     */
+    @GetMapping("/instances/{id}/logs")
+    public Response<JobInstanceLogDTO> getLogs(@PathVariable String id,
+                                               @RequestParam(required = false) JobLogRole role,
+                                               @RequestParam(required = false) Integer tailLines,
+                                               @RequestParam(required = false) Boolean previous) {
+        JobInstanceLogQuery query = new JobInstanceLogQuery()
+                .setRole(role == null ? JobLogRole.ALL : role)
+                .setTailLines(tailLines)
+                .setPrevious(previous == null ? Boolean.FALSE : previous);
+        JobInstanceLogBO bo = jobInstanceService.getLogs(id, query);
+        JobInstanceLogDTO dto = JobInstanceAdapterConvert.INSTANCE.toJobInstanceLogDTO(bo);
         return Response.success(dto);
     }
 

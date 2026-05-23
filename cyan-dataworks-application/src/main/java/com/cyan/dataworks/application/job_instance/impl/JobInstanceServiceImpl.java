@@ -7,6 +7,7 @@ import com.cyan.arch.common.api.SilentException;
 import com.cyan.arch.common.util.JSON;
 import com.cyan.dataworks.application.job_instance.JobInstanceService;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
+import com.cyan.dataworks.application.job_instance.bo.JobInstanceLogBO;
 import com.cyan.dataworks.application.job_instance.cmd.JobInstanceCmd;
 import com.cyan.dataworks.application.job_instance.cmd.JobPreviewExecuteCmd;
 import com.cyan.dataworks.application.job_instance.convert.JobInstanceAppConvert;
@@ -14,14 +15,19 @@ import com.cyan.dataworks.application.job.runtime.JobExecutionPlanner;
 import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
 import com.cyan.dataworks.domain.job_instance.JobInstance;
+import com.cyan.dataworks.domain.job_instance.query.JobInstanceLogQuery;
 import com.cyan.dataworks.domain.job_instance.query.JobInstancePageQuery;
 import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
+import com.cyan.dataworks.enums.JobLogRole;
 import com.cyan.dataworks.infra.remote.flink.FlinkRemoteService;
+import com.cyan.dataworks.infra.remote.flink.operator.bo.FlinkPodLogBO;
 import com.cyan.datagateway.client.SqlGatewayClient;
 import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
 import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,17 +49,20 @@ public class JobInstanceServiceImpl implements JobInstanceService {
     private final SqlGatewayClient sqlGatewayClient;
     private final FlinkRemoteService flinkRemoteService;
     private final JobExecutionPlanner jobExecutionPlanner;
+    private final ObjectMapper objectMapper;
 
     public JobInstanceServiceImpl(JobRepository jobRepository,
                                   JobInstanceRepository jobInstanceRepository,
                                   SqlGatewayClient sqlGatewayClient,
                                   FlinkRemoteService flinkRemoteService,
-                                  JobExecutionPlanner jobExecutionPlanner) {
+                                  JobExecutionPlanner jobExecutionPlanner,
+                                  ObjectMapper objectMapper) {
         this.jobRepository = jobRepository;
         this.jobInstanceRepository = jobInstanceRepository;
         this.sqlGatewayClient = sqlGatewayClient;
         this.flinkRemoteService = flinkRemoteService;
         this.jobExecutionPlanner = jobExecutionPlanner;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -148,6 +157,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
         Assert.isTrue(job.getStatus() == com.cyan.dataworks.enums.TaskStatus.ONLINE, new SilentException("只有已发布作业可启动正式任务"));
         Assert.isTrue(job.getEngineType() == EngineType.FLINK, new SilentException("当前仅Flink任务支持Application Mode启动"));
 
+        cleanupOldFlinkInstances(job);
         String executableSql = jobExecutionPlanner.buildExecutableSql(job);
         JobInstanceCmd cmd = new JobInstanceCmd()
                 .setJobId(jobId)
@@ -164,7 +174,8 @@ public class JobInstanceServiceImpl implements JobInstanceService {
 
         long startTime = System.currentTimeMillis();
         try {
-            String resultData = flinkRemoteService.submitApplication(job.getName(), executableSql);
+            String resultData = flinkRemoteService.submitApplication(job.getId(), job.getName(), executableSql);
+            bindApplicationInfo(instance, resultData);
             instance.markSuccess(resultData, System.currentTimeMillis() - startTime, jobInstanceRepository);
         } catch (Exception e) {
             instance.markFailed(e.getMessage(), System.currentTimeMillis() - startTime, jobInstanceRepository);
@@ -263,5 +274,139 @@ public class JobInstanceServiceImpl implements JobInstanceService {
         JobInstance instance = jobInstanceRepository.findById(id);
         Assert.notNull(instance, new SilentException("实例不存在"));
         return JobInstanceAppConvert.INSTANCE.toJobInstanceBO(instance);
+    }
+
+    /**
+     * 查询实例K8s Pod日志
+     */
+    @Override
+    public JobInstanceLogBO getLogs(String id, JobInstanceLogQuery query) {
+        JobInstance instance = jobInstanceRepository.findById(id);
+        Assert.notNull(instance, new SilentException("实例不存在"));
+        Assert.isTrue(instance.getEngineType() == EngineType.FLINK, new SilentException("只有Flink实例支持查看K8s Pod日志"));
+
+        JsonNode resultData = parseResultData(instance.getResultData());
+        String deploymentName = Optional.ofNullable(instance.getApplicationName())
+                .filter(value -> !value.isBlank())
+                .orElse(resultData == null ? "" : resultData.path("deploymentName").asText(""));
+        Assert.notBlank(deploymentName, new SilentException("实例未关联FlinkDeployment"));
+        String namespace = Optional.ofNullable(instance.getApplicationNamespace())
+                .filter(value -> !value.isBlank())
+                .orElse(resultData == null ? "" : resultData.path("namespace").asText(""));
+        JobLogRole role = Optional.ofNullable(query)
+                .map(JobInstanceLogQuery::getRole)
+                .orElse(JobLogRole.ALL);
+        int tailLines = normalizeTailLines(Optional.ofNullable(query).map(JobInstanceLogQuery::getTailLines).orElse(null));
+        boolean previous = Optional.ofNullable(query).map(JobInstanceLogQuery::getPrevious).orElse(false);
+
+        List<FlinkPodLogBO> podLogs = flinkRemoteService.getApplicationPodLogs(deploymentName, namespace, role, tailLines, previous);
+        List<JobInstanceLogBO.PodLogBO> pods = podLogs.stream()
+                .map(podLog -> new JobInstanceLogBO.PodLogBO()
+                        .setPodName(podLog.getPodName())
+                        .setRole(podLog.getRole())
+                        .setContainerName(podLog.getContainerName())
+                        .setLog(podLog.getLog()))
+                .toList();
+        String logs = pods.stream()
+                .map(pod -> "===== " + pod.getPodName() + " / " + pod.getRole().getDesc() + " / " + pod.getContainerName() + " =====\n"
+                        + Optional.ofNullable(pod.getLog()).orElse(""))
+                .reduce((left, right) -> left + "\n\n" + right)
+                .orElse("");
+        String message = pods.isEmpty() ? "未找到匹配的Flink Pod" : "日志读取成功";
+        return new JobInstanceLogBO()
+                .setInstanceId(instance.getId())
+                .setDeploymentName(deploymentName)
+                .setNamespace(namespace)
+                .setRole(role)
+                .setTailLines(tailLines)
+                .setPods(pods)
+                .setLogs(logs)
+                .setMessage(message);
+    }
+
+    /**
+     * 解析执行结果JSON
+     */
+    private JsonNode parseResultData(String resultData) {
+        if (resultData == null || resultData.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(resultData);
+        } catch (Exception e) {
+            throw new SilentException("实例执行结果解析失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 规整日志尾部行数
+     */
+    private int normalizeTailLines(Integer tailLines) {
+        if (tailLines == null || tailLines <= 0) {
+            return 500;
+        }
+        return Math.min(tailLines, 5000);
+    }
+
+    /**
+     * 清理旧Flink实例
+     */
+    private void cleanupOldFlinkInstances(Job job) {
+        JobInstance latestInstance = jobInstanceRepository.findLatestByJobId(job.getId());
+        if (latestInstance != null) {
+            String applicationName = Optional.ofNullable(latestInstance.getApplicationName())
+                    .filter(value -> !value.isBlank())
+                    .orElseGet(() -> parseApplicationNameQuietly(latestInstance.getResultData()));
+            String configMapName = Optional.ofNullable(latestInstance.getConfigMapName())
+                    .filter(value -> !value.isBlank())
+                    .orElse(applicationName == null || applicationName.isBlank() ? "" : applicationName + "-sql");
+            if (applicationName != null && !applicationName.isBlank()) {
+                flinkRemoteService.deleteApplication(applicationName, configMapName);
+            }
+        }
+        jobInstanceRepository.deleteByJobId(job.getId());
+    }
+
+    /**
+     * 绑定Application信息
+     */
+    private void bindApplicationInfo(JobInstance instance, String resultData) {
+        JsonNode node = parseResultData(resultData);
+        if (node == null) {
+            return;
+        }
+        instance.bindFlinkApplication(
+                node.path("deploymentName").asText(""),
+                node.path("namespace").asText(""),
+                node.path("configMapName").asText(""),
+                node.path("jobManagerPodName").asText(""),
+                stringify(node.get("taskManagerPodNames"))
+        );
+    }
+
+    /**
+     * 安静解析Application名称
+     */
+    private String parseApplicationNameQuietly(String resultData) {
+        try {
+            JsonNode node = parseResultData(resultData);
+            return node == null ? "" : node.path("deploymentName").asText("");
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * JSON节点序列化
+     */
+    private String stringify(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return "[]";
+        }
+        try {
+            return objectMapper.writeValueAsString(node);
+        } catch (Exception e) {
+            return "[]";
+        }
     }
 }
