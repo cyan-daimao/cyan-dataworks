@@ -4,7 +4,6 @@ import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.SilentException;
 import com.cyan.arch.common.util.StrUtils;
 
-import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -16,10 +15,58 @@ import java.util.regex.Pattern;
 public final class SqlPolicy {
 
     /**
-     * 平台禁止用户直接执行的 DDL/DML 关键字
+     * 禁止对数仓分层表(ods/dwd/dws/ads)执行的 CREATE 操作
      */
-    private static final Pattern FORBIDDEN_KEYWORD_PATTERN = Pattern.compile(
-            "(^|\\s|;)(CREATE|ALTER|DROP|TRUNCATE|INSERT|UPDATE|DELETE|MERGE|REPLACE|CALL|GRANT|REVOKE)\\s+",
+    private static final Pattern FORBIDDEN_CREATE_LAYER_PATTERN = Pattern.compile(
+            "CREATE\\s+TABLE\\s+(IF\\s+NOT\\s+EXISTS\\s+)?(ods_|dwd_|dws_|ads_)\\w+",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    /**
+     * 禁止对数仓分层表(ods/dwd/dws/ads)执行的 ALTER 操作
+     */
+    private static final Pattern FORBIDDEN_ALTER_LAYER_PATTERN = Pattern.compile(
+            "ALTER\\s+TABLE\\s+(ods_|dwd_|dws_|ads_)\\w+",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    /**
+     * 禁止对数仓分层表(ods/dwd/dws/ads)执行的 DROP 操作
+     */
+    private static final Pattern FORBIDDEN_DROP_LAYER_PATTERN = Pattern.compile(
+            "DROP\\s+TABLE\\s+(IF\\s+EXISTS\\s+)?(ods_|dwd_|dws_|ads_)\\w+",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    /**
+     * 禁止对数仓分层表(ods/dwd/dws/ads)执行的 TRUNCATE 操作
+     */
+    private static final Pattern FORBIDDEN_TRUNCATE_LAYER_PATTERN = Pattern.compile(
+            "TRUNCATE\\s+TABLE\\s+(ods_|dwd_|dws_|ads_)\\w+",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    /**
+     * 禁止对数仓分层表(ods/dwd/dws/ads)执行的 INSERT 操作
+     */
+    private static final Pattern FORBIDDEN_INSERT_LAYER_PATTERN = Pattern.compile(
+            "INSERT\\s+(INTO|OVERWRITE)\\s+(ods_|dwd_|dws_|ads_)\\w+",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    /**
+     * 禁止对数仓分层表(ods/dwd/dws/ads)执行的 UPDATE 操作
+     */
+    private static final Pattern FORBIDDEN_UPDATE_LAYER_PATTERN = Pattern.compile(
+            "UPDATE\\s+(ods_|dwd_|dws_|ads_)\\w+",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    /**
+     * 禁止对数仓分层表(ods/dwd/dws/ads)执行的 DELETE 操作
+     */
+    private static final Pattern FORBIDDEN_DELETE_LAYER_PATTERN = Pattern.compile(
+            "DELETE\\s+FROM\\s+(ods_|dwd_|dws_|ads_)\\w+",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -27,14 +74,26 @@ public final class SqlPolicy {
     }
 
     /**
-     * 校验用户 SQL 只能是查询语义
+     * 校验用户 SQL：
+     * 禁止对数仓分层表(ods/dwd/dws/ads)执行 DDL/DML，非分层表的 Flink SQL 允许执行
      */
     public static void assertSelectOnly(String sql) {
         Assert.notBlank(sql, new SilentException("SQL内容不能为空"));
         String normalized = sql.trim();
-        Assert.isFalse(FORBIDDEN_KEYWORD_PATTERN.matcher(normalized).find(), new SilentException("禁止在数据开发中直接执行DDL/DML，请通过元数据平台管理表结构，由平台生成写入语句"));
-        String upperSql = normalized.toUpperCase(Locale.ROOT);
-        Assert.isTrue(upperSql.startsWith("SELECT") || upperSql.startsWith("WITH"), new SilentException("当前节点只允许编写SELECT查询"));
+
+        // 1. 禁止对数仓分层表执行 DDL/DML
+        if (FORBIDDEN_CREATE_LAYER_PATTERN.matcher(normalized).find()
+                || FORBIDDEN_ALTER_LAYER_PATTERN.matcher(normalized).find()
+                || FORBIDDEN_DROP_LAYER_PATTERN.matcher(normalized).find()
+                || FORBIDDEN_TRUNCATE_LAYER_PATTERN.matcher(normalized).find()
+                || FORBIDDEN_INSERT_LAYER_PATTERN.matcher(normalized).find()
+                || FORBIDDEN_UPDATE_LAYER_PATTERN.matcher(normalized).find()
+                || FORBIDDEN_DELETE_LAYER_PATTERN.matcher(normalized).find()) {
+            throw new SilentException("禁止在数据开发中直接对数仓分层表(ods/dwd/dws/ads)执行DDL/DML，请通过元数据平台管理表结构，由平台生成写入语句");
+        }
+
+        // 非分层表的 Flink SQL（CREATE TEMPORARY TABLE、INSERT INTO 非分层表等）允许执行
+        // 数仓分层表(ods/dwd/dws/ads)的 DDL/DML 由平台统一管理
     }
 
     /**
