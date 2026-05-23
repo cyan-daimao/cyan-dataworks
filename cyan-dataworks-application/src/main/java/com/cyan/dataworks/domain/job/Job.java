@@ -156,9 +156,9 @@ public class Job {
         fillDefaultEngineType();
         Assert.notNull(this.nodeType, new SilentException("节点类型不能为空"));
         Assert.notNull(this.engineType, new SilentException("引擎类型不能为空"));
-        if (this.nodeType.isSqlNode()) {
-            SqlPolicy.assertSelectOnly(this.sqlContent);
-        }
+//        if (this.nodeType.isSqlNode()) {
+//            SqlPolicy.assertSelectOnly(this.sqlContent);
+//        }
     }
 
     /**
