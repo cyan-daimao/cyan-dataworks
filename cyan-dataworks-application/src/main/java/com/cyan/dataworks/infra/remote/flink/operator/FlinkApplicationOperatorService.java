@@ -110,14 +110,20 @@ public class FlinkApplicationOperatorService {
      */
     public void delete(String deploymentName, String configMapName) {
         String namespace = defaultNamespace;
-        try {
-            k8sClient.genericKubernetesResources("flink.apache.org/v1beta1", "FlinkDeployment")
-                    .inNamespace(namespace)
-                    .withName(deploymentName)
-                    .delete();
-            log.info("FlinkDeployment 删除成功: {}", deploymentName);
-        } catch (Exception e) {
-            log.warn("删除 FlinkDeployment 失败: {}, error: {}", deploymentName, e.getMessage());
+        GenericKubernetesResource resource = get(deploymentName);
+        if (resource != null) {
+            try {
+                k8sClient.genericKubernetesResources("flink.apache.org/v1beta1", "FlinkDeployment")
+                        .inNamespace(namespace)
+                        .withName(deploymentName)
+                        .delete();
+                log.info("FlinkDeployment 删除成功: {}", deploymentName);
+                waitFlinkDeploymentDeleted(deploymentName, namespace);
+            } catch (SilentException e) {
+                throw e;
+            } catch (Exception e) {
+                log.warn("删除 FlinkDeployment 失败: {}, error: {}", deploymentName, e.getMessage());
+            }
         }
 
         try {
@@ -128,6 +134,28 @@ public class FlinkApplicationOperatorService {
         } catch (Exception e) {
             log.warn("删除 ConfigMap 失败: {}, error: {}", configMapName, e.getMessage());
         }
+    }
+
+    /**
+     * 等待FlinkDeployment真正删除，避免同名Application重建时被旧删除事件清理
+     */
+    private void waitFlinkDeploymentDeleted(String deploymentName, String namespace) {
+        for (int i = 0; i < 90; i++) {
+            GenericKubernetesResource resource = k8sClient.genericKubernetesResources("flink.apache.org/v1beta1", "FlinkDeployment")
+                    .inNamespace(namespace)
+                    .withName(deploymentName)
+                    .get();
+            if (resource == null) {
+                return;
+            }
+            try {
+                Thread.sleep(1000L);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        throw new SilentException("等待FlinkDeployment删除超时: " + deploymentName);
     }
 
     /**
