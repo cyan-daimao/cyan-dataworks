@@ -31,4 +31,12 @@ public interface JobInstanceRepository {
      * 更新实例
      */
     JobInstance updateById(JobInstance jobInstance);
+
+    /**
+     * 根据作业ID查询最近一个实例
+     *
+     * @param jobId 作业ID
+     * @return 最近的实例
+     */
+    JobInstance findLatestByJobId(String jobId);
 }

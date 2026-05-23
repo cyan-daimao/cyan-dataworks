@@ -76,4 +76,20 @@ public class JobInstanceRepositoryImpl implements JobInstanceRepository {
         jobInstanceMapper.updateById(jobInstanceDO);
         return findById(jobInstance.getId());
     }
+
+    /**
+     * 根据作业ID查询最近一个实例
+     */
+    @Override
+    public JobInstance findLatestByJobId(String jobId) {
+        LambdaQueryWrapper<JobInstanceDO> wrapper = new LambdaQueryWrapper<JobInstanceDO>()
+                .eq(JobInstanceDO::getJobId, com.cyan.arch.common.util.Convert.toLong(jobId))
+                .orderByDesc(JobInstanceDO::getCreatedAt)
+                .last("LIMIT 1");
+        JobInstanceDO jobInstanceDO = jobInstanceMapper.selectOne(wrapper);
+        if (jobInstanceDO == null) {
+            return null;
+        }
+        return JobInstanceInfraConvert.INSTANCE.toJobInstance(jobInstanceDO);
+    }
 }
