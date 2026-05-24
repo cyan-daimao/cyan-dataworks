@@ -13,6 +13,7 @@ import com.cyan.dataworks.infra.remote.flink.operator.cmd.FlinkApplicationSubmit
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import feign.FeignException;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -124,7 +125,7 @@ public class FlinkRemoteService {
             return objectMapper.writeValueAsString(result);
         } catch (Exception e) {
             log.error("FlinkSQL临时执行失败", e);
-            throw new SilentException("FlinkSQL临时执行失败：" + e.getMessage());
+            throw new SilentException("FlinkSQL临时执行失败：" + extractGatewayErrorMessage(e));
         } finally {
             closeQuietly(sessionHandle, operationHandle);
         }
@@ -287,7 +288,7 @@ public class FlinkRemoteService {
         int readPages = 0;
         while (readPages < getPreviewMaxResultPages() && data.size() < getPreviewMaxResultRows()) {
             String body = fetchReadyResultPage(resultUri);
-            if (body == null || body.isBlank()) {
+            if (body.isBlank()) {
                 break;
             }
             readPages++;
@@ -472,6 +473,80 @@ public class FlinkRemoteService {
     }
 
     /**
+     * 提取SQL Gateway异常中的真实错误信息
+     *
+     * @param throwable 异常对象
+     * @return 可展示的错误信息
+     */
+    private String extractGatewayErrorMessage(Throwable throwable) {
+        if (throwable == null) {
+            return "未知错误";
+        }
+        if (throwable instanceof FeignException feignException) {
+            String content = feignException.contentUTF8();
+            String message = extractGatewayErrorBody(content);
+            if (!message.isBlank()) {
+                return message;
+            }
+        }
+        if (throwable.getCause() != null && throwable.getCause() != throwable) {
+            String causeMessage = extractGatewayErrorMessage(throwable.getCause());
+            if (!causeMessage.isBlank() && !"未知错误".equals(causeMessage)) {
+                return causeMessage;
+            }
+        }
+        return throwable.getMessage() == null || throwable.getMessage().isBlank()
+                ? "未知错误"
+                : throwable.getMessage();
+    }
+
+    /**
+     * 从SQL Gateway错误响应体中提取errors字段
+     *
+     * @param body 错误响应体
+     * @return 错误文本
+     */
+    private String extractGatewayErrorBody(String body) {
+        if (body == null || body.isBlank()) {
+            return "";
+        }
+        try {
+            JsonNode node = objectMapper.readTree(body);
+            JsonNode errors = node.get("errors");
+            if (errors != null && errors.isArray()) {
+                List<String> messages = new ArrayList<>();
+                for (JsonNode error : errors) {
+                    String message = error.asText("");
+                    if (!message.isBlank()) {
+                        messages.add(message);
+                    }
+                }
+                return truncateGatewayError(String.join("\n", messages));
+            }
+            return truncateGatewayError(node.toString());
+        } catch (Exception e) {
+            return truncateGatewayError(body);
+        }
+    }
+
+    /**
+     * 限制SQL Gateway错误长度，避免接口返回过大
+     *
+     * @param message 错误文本
+     * @return 截断后的错误文本
+     */
+    private String truncateGatewayError(String message) {
+        if (message == null) {
+            return "";
+        }
+        int maxLength = 8000;
+        if (message.length() <= maxLength) {
+            return message;
+        }
+        return message.substring(0, maxLength) + "...";
+    }
+
+    /**
      * 从SQL Gateway列元数据中提取前端展示列名
      *
      * @param columns 列元数据节点
@@ -521,7 +596,7 @@ public class FlinkRemoteService {
                     normalized.put(entry.getKey(), objectMapper.convertValue(entry.getValue(), Object.class)));
             return normalized;
         }
-        String column = columns.isEmpty() ? "result" : columns.get(0);
+        String column = columns.isEmpty() ? "result" : columns.getFirst();
         normalized.put(column, fields == null ? null : objectMapper.convertValue(fields, Object.class));
         return normalized;
     }
@@ -691,24 +766,6 @@ public class FlinkRemoteService {
      */
     private int getPreviewMaxResultRows() {
         return Optional.ofNullable(flinkProperties.getRest().getPreviewMaxResultRows()).orElse(100);
-    }
-
-    /**
-     * Mock提交Application Mode作业
-     *
-     * @param jobName 作业名称
-     * @param sql     SQL语句
-     * @return mock结果JSON
-     */
-    private String mockSubmitApplication(String jobName, String sql) {
-        Map<String, Object> result = Map.of(
-                "mock", true,
-                "mode", "APPLICATION",
-                "jobName", jobName,
-                "sql", sql,
-                "message", "Flink Application Mode提交能力尚未接入真实集群"
-        );
-        return JSON.toJSONString(result);
     }
 
     /**
