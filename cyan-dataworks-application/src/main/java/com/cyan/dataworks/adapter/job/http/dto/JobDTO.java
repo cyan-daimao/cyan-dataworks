@@ -3,6 +3,7 @@ package com.cyan.dataworks.adapter.job.http.dto;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.NodeType;
 import com.cyan.dataworks.enums.TaskStatus;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -75,6 +76,7 @@ public class JobDTO {
     /**
      * 创建时间
      */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime createdAt;
 
     /**
@@ -85,5 +87,6 @@ public class JobDTO {
     /**
      * 更新时间
      */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime updatedAt;
 }
