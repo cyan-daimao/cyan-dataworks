@@ -2,6 +2,7 @@ package com.cyan.dataworks.infra.remote.flink;
 
 import com.cyan.arch.common.api.SilentException;
 import com.cyan.arch.common.util.JSON;
+import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfig;
 import com.cyan.dataworks.infra.config.FlinkProperties;
 import com.cyan.dataworks.enums.JobLogRole;
 import com.cyan.dataworks.infra.remote.flink.client.FlinkRpcClient;
@@ -136,7 +137,7 @@ public class FlinkRemoteService {
      * @param sql     SQL语句
      * @return 提交结果JSON
      */
-    public String submitApplication(String jobId, String jobName, String sql) {
+    public String submitApplication(String jobId, String jobName, String sql, FlinkRuntimeConfig runtimeConfig) {
         String deploymentName = toTrackingDeploymentName(jobId);
         String configMapName = deploymentName + "-sql";
 
@@ -144,7 +145,10 @@ public class FlinkRemoteService {
                 .setJobName(jobName)
                 .setDeploymentName(deploymentName)
                 .setConfigMapName(configMapName)
-                .setSql(sql);
+                .setSql(sql)
+                .setTaskManagerMemoryGb(runtimeConfig.getTaskManagerMemoryGb())
+                .setTaskManagerCpu(runtimeConfig.getTaskManagerCpu())
+                .setParallelism(runtimeConfig.getParallelism());
 
         FlinkApplicationBO result = flinkApplicationOperatorService.submit(cmd);
 
@@ -158,6 +162,11 @@ public class FlinkRemoteService {
         resultMap.put("message", result.getMessage());
         resultMap.put("jobManagerPodName", result.getJobManagerPodName());
         resultMap.put("taskManagerPodNames", Optional.ofNullable(result.getTaskManagerPodNames()).orElse(List.of()));
+        resultMap.put("runtimeConfig", Map.of(
+                "taskManagerMemoryGb", runtimeConfig.getTaskManagerMemoryGb(),
+                "taskManagerCpu", runtimeConfig.getTaskManagerCpu(),
+                "parallelism", runtimeConfig.getParallelism()
+        ));
         return JSON.toJSONString(resultMap);
     }
 

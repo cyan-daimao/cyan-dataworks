@@ -371,6 +371,8 @@ public class FlinkApplicationOperatorService {
         String jarUri = cmd.getJarUri() != null ? cmd.getJarUri() : defaultJarUri;
         String entryClass = cmd.getEntryClass() != null ? cmd.getEntryClass() : defaultEntryClass;
         int parallelism = cmd.getParallelism() != null ? cmd.getParallelism() : defaultParallelism;
+        int taskManagerMemoryGb = cmd.getTaskManagerMemoryGb() != null ? cmd.getTaskManagerMemoryGb() : 1;
+        double taskManagerCpu = cmd.getTaskManagerCpu() != null ? cmd.getTaskManagerCpu() : 0.5D;
 
         return String.format("""
                 apiVersion: flink.apache.org/v1beta1
@@ -388,8 +390,8 @@ public class FlinkApplicationOperatorService {
                       cpu: 0.5
                   taskManager:
                     resource:
-                      memory: "1g"
-                      cpu: 0.5
+                      memory: "%dg"
+                      cpu: %s
                   flinkConfiguration:
                     state.backend.type: rocksdb
                     classloader.parent-first-patterns.additional: com.codahale.metrics
@@ -428,8 +430,19 @@ public class FlinkApplicationOperatorService {
                             name: %s
                 """,
                 deploymentName, namespace, image,
+                taskManagerMemoryGb, formatCpu(taskManagerCpu),
                 rustfsEndpoint, rustfsAccessKey, rustfsSecretKey,
                 jarUri, entryClass, parallelism,
                 configMapName);
+    }
+
+    /**
+     * 格式化CPU数值
+     */
+    private String formatCpu(double cpu) {
+        if (cpu == Math.rint(cpu)) {
+            return String.valueOf((long) cpu);
+        }
+        return String.valueOf(cpu);
     }
 }

@@ -8,6 +8,8 @@ import com.cyan.dataworks.application.job.bo.JobBO;
 import com.cyan.dataworks.application.job.cmd.JobCmd;
 import com.cyan.dataworks.application.job.convert.JobAppConvert;
 import com.cyan.dataworks.application.job.runtime.JobExecutionPlanner;
+import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfig;
+import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfigParser;
 import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.domain.job.query.JobPageQuery;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
@@ -46,6 +48,7 @@ public class JobServiceImpl implements JobService {
     private final FlinkRemoteService flinkRemoteService;
     private final FlinkApplicationOperatorService flinkApplicationOperatorService;
     private final JobExecutionPlanner jobExecutionPlanner;
+    private final FlinkRuntimeConfigParser flinkRuntimeConfigParser;
     private final ObjectMapper objectMapper;
 
     public JobServiceImpl(JobRepository jobRepository,
@@ -55,6 +58,7 @@ public class JobServiceImpl implements JobService {
                           FlinkRemoteService flinkRemoteService,
                           FlinkApplicationOperatorService flinkApplicationOperatorService,
                           JobExecutionPlanner jobExecutionPlanner,
+                          FlinkRuntimeConfigParser flinkRuntimeConfigParser,
                           ObjectMapper objectMapper) {
         this.jobRepository = jobRepository;
         this.jobScheduleRepository = jobScheduleRepository;
@@ -63,6 +67,7 @@ public class JobServiceImpl implements JobService {
         this.flinkRemoteService = flinkRemoteService;
         this.flinkApplicationOperatorService = flinkApplicationOperatorService;
         this.jobExecutionPlanner = jobExecutionPlanner;
+        this.flinkRuntimeConfigParser = flinkRuntimeConfigParser;
         this.objectMapper = objectMapper;
     }
 
@@ -178,7 +183,8 @@ public class JobServiceImpl implements JobService {
             instance = instance.save(jobInstanceRepository);
             long startTime = System.currentTimeMillis();
             try {
-                String resultData = flinkRemoteService.submitApplication(job.getId(), job.getName(), executableSql);
+                FlinkRuntimeConfig runtimeConfig = flinkRuntimeConfigParser.parse(job);
+                String resultData = flinkRemoteService.submitApplication(job.getId(), job.getName(), executableSql, runtimeConfig);
                 bindApplicationInfo(instance, resultData);
                 instance.markSuccess(resultData, System.currentTimeMillis() - startTime, jobInstanceRepository);
                 log.info("Flink Job {} 发布成功，已创建 K8s Application: {}", job.getId(), instance.getApplicationName());

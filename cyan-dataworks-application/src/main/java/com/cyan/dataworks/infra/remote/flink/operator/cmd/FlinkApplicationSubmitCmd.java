@@ -61,4 +61,14 @@ public class FlinkApplicationSubmitCmd {
      * 并行度
      */
     private Integer parallelism;
+
+    /**
+     * TaskManager内存，单位GB
+     */
+    private Integer taskManagerMemoryGb;
+
+    /**
+     * TaskManager CPU核数
+     */
+    private Double taskManagerCpu;
 }

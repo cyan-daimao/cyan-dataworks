@@ -12,6 +12,8 @@ import com.cyan.dataworks.application.job_instance.cmd.JobInstanceCmd;
 import com.cyan.dataworks.application.job_instance.cmd.JobPreviewExecuteCmd;
 import com.cyan.dataworks.application.job_instance.convert.JobInstanceAppConvert;
 import com.cyan.dataworks.application.job.runtime.JobExecutionPlanner;
+import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfig;
+import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfigParser;
 import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
 import com.cyan.dataworks.domain.job_instance.JobInstance;
@@ -49,6 +51,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
     private final SqlGatewayClient sqlGatewayClient;
     private final FlinkRemoteService flinkRemoteService;
     private final JobExecutionPlanner jobExecutionPlanner;
+    private final FlinkRuntimeConfigParser flinkRuntimeConfigParser;
     private final ObjectMapper objectMapper;
 
     public JobInstanceServiceImpl(JobRepository jobRepository,
@@ -56,12 +59,14 @@ public class JobInstanceServiceImpl implements JobInstanceService {
                                   SqlGatewayClient sqlGatewayClient,
                                   FlinkRemoteService flinkRemoteService,
                                   JobExecutionPlanner jobExecutionPlanner,
+                                  FlinkRuntimeConfigParser flinkRuntimeConfigParser,
                                   ObjectMapper objectMapper) {
         this.jobRepository = jobRepository;
         this.jobInstanceRepository = jobInstanceRepository;
         this.sqlGatewayClient = sqlGatewayClient;
         this.flinkRemoteService = flinkRemoteService;
         this.jobExecutionPlanner = jobExecutionPlanner;
+        this.flinkRuntimeConfigParser = flinkRuntimeConfigParser;
         this.objectMapper = objectMapper;
     }
 
@@ -174,7 +179,8 @@ public class JobInstanceServiceImpl implements JobInstanceService {
 
         long startTime = System.currentTimeMillis();
         try {
-            String resultData = flinkRemoteService.submitApplication(job.getId(), job.getName(), executableSql);
+            FlinkRuntimeConfig runtimeConfig = flinkRuntimeConfigParser.parse(job);
+            String resultData = flinkRemoteService.submitApplication(job.getId(), job.getName(), executableSql, runtimeConfig);
             bindApplicationInfo(instance, resultData);
             instance.markSuccess(resultData, System.currentTimeMillis() - startTime, jobInstanceRepository);
         } catch (Exception e) {
