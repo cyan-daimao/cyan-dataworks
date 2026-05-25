@@ -10,6 +10,7 @@ import com.cyan.dataworks.application.job.convert.JobAppConvert;
 import com.cyan.dataworks.application.job.runtime.JobExecutionPlanner;
 import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfig;
 import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfigParser;
+import com.cyan.dataworks.application.job.lineage.JobLineageSyncService;
 import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.domain.job.query.JobPageQuery;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
@@ -49,6 +50,7 @@ public class JobServiceImpl implements JobService {
     private final FlinkApplicationOperatorService flinkApplicationOperatorService;
     private final JobExecutionPlanner jobExecutionPlanner;
     private final FlinkRuntimeConfigParser flinkRuntimeConfigParser;
+    private final JobLineageSyncService jobLineageSyncService;
     private final ObjectMapper objectMapper;
 
     public JobServiceImpl(JobRepository jobRepository,
@@ -59,6 +61,7 @@ public class JobServiceImpl implements JobService {
                           FlinkApplicationOperatorService flinkApplicationOperatorService,
                           JobExecutionPlanner jobExecutionPlanner,
                           FlinkRuntimeConfigParser flinkRuntimeConfigParser,
+                          JobLineageSyncService jobLineageSyncService,
                           ObjectMapper objectMapper) {
         this.jobRepository = jobRepository;
         this.jobScheduleRepository = jobScheduleRepository;
@@ -68,6 +71,7 @@ public class JobServiceImpl implements JobService {
         this.flinkApplicationOperatorService = flinkApplicationOperatorService;
         this.jobExecutionPlanner = jobExecutionPlanner;
         this.flinkRuntimeConfigParser = flinkRuntimeConfigParser;
+        this.jobLineageSyncService = jobLineageSyncService;
         this.objectMapper = objectMapper;
     }
 
@@ -112,6 +116,7 @@ public class JobServiceImpl implements JobService {
         job.setCreatedBy(createdBy);
         job.setUpdatedBy(createdBy);
         job = job.save(jobRepository);
+        jobLineageSyncService.sync(job);
         return JobAppConvert.INSTANCE.toJobBO(job);
     }
 
@@ -129,6 +134,7 @@ public class JobServiceImpl implements JobService {
         job.setCreatedAt(existing.getCreatedAt());
         job.setUpdatedBy(updatedBy);
         job = job.update(jobRepository);
+        jobLineageSyncService.sync(job);
         return JobAppConvert.INSTANCE.toJobBO(job);
     }
 
@@ -156,6 +162,7 @@ public class JobServiceImpl implements JobService {
         Assert.notNull(existing, new SilentException("作业不存在"));
         existing.setUpdatedBy(updatedBy);
         Job job = existing.publish(jobRepository);
+        jobLineageSyncService.sync(job);
         syncFlinkApplicationIfNeeded(job);
         return JobAppConvert.INSTANCE.toJobBO(job);
     }
