@@ -20,6 +20,16 @@ flink:
     preview-poll-interval-ms: 500
     preview-max-result-pages: 20
     preview-max-result-rows: 100
+  iceberg-catalog:
+    enabled: true
+    name: iceberg
+    type: iceberg
+    catalog-type: rest
+    uri: http://gravitino-iceberg-rest-server.gravitino.svc.cluster.local:9001/iceberg
+    s3-endpoint: http://10.0.0.2:9000
+    s3-access-key-id: rustfsadmin
+    s3-secret-access-key: rustfsadmin
+    s3-path-style-access: true
   operator:
     enabled: true
     namespace: flink
