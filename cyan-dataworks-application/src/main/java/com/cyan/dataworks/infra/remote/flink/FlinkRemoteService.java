@@ -382,11 +382,30 @@ public class FlinkRemoteService {
                 return lastBody;
             }
             if (isTerminalFailedStatus(status)) {
-                throw new SilentException("FlinkSQL语句执行失败，operation状态：" + status + "，响应：" + lastBody);
+                String detail = fetchOperationFailureDetail(sessionHandle, operationHandle);
+                throw new SilentException("FlinkSQL语句执行失败，operation状态：" + status + "，响应：" + lastBody + "，详情：" + detail);
             }
             sleep(getPreviewPollIntervalMs());
         }
         throw new SilentException("FlinkSQL语句执行超时，operation最后状态：" + lastBody);
+    }
+
+    /**
+     * 拉取失败operation的异常详情
+     *
+     * @param sessionHandle   session标识
+     * @param operationHandle operation标识
+     * @return 异常详情
+     */
+    private String fetchOperationFailureDetail(String sessionHandle, String operationHandle) {
+        URI uri = URI.create(getGatewayUrl() + "/v1/sessions/" + encode(sessionHandle)
+                + "/operations/" + encode(operationHandle) + "/result/0?rowFormat=JSON");
+        try {
+            String body = flinkRpcClient.get(uri);
+            return body == null || body.isBlank() ? "SQL Gateway未返回失败详情" : body;
+        } catch (Exception e) {
+            return extractGatewayErrorMessage(e);
+        }
     }
 
     /**
