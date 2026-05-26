@@ -274,7 +274,7 @@ public class FlinkRemoteService {
      */
     private String fetchOperationResult(String sessionHandle, String operationHandle, String statement) {
         if (!isQueryStatement(statement)) {
-            return getOperationStatus(sessionHandle, operationHandle);
+            return waitOperationFinished(sessionHandle, operationHandle);
         }
         String resultUri = "/v1/sessions/" + encode(sessionHandle)
                 + "/operations/" + encode(operationHandle)
@@ -366,6 +366,30 @@ public class FlinkRemoteService {
     }
 
     /**
+     * 等待非查询operation执行完成
+     *
+     * @param sessionHandle   session标识
+     * @param operationHandle operation标识
+     * @return operation状态JSON
+     */
+    private String waitOperationFinished(String sessionHandle, String operationHandle) {
+        int pollTimes = getPreviewPollTimes();
+        String lastBody = "";
+        for (int i = 0; i < pollTimes; i++) {
+            lastBody = getOperationStatus(sessionHandle, operationHandle);
+            String status = parseOperationStatus(lastBody);
+            if ("FINISHED".equals(status)) {
+                return lastBody;
+            }
+            if (isTerminalFailedStatus(status)) {
+                throw new SilentException("FlinkSQL语句执行失败，operation状态：" + status + "，响应：" + lastBody);
+            }
+            sleep(getPreviewPollIntervalMs());
+        }
+        throw new SilentException("FlinkSQL语句执行超时，operation最后状态：" + lastBody);
+    }
+
+    /**
      * 查询operation状态
      *
      * @param sessionHandle   session标识
@@ -376,6 +400,33 @@ public class FlinkRemoteService {
         URI uri = URI.create(getGatewayUrl() + "/v1/sessions/" + encode(sessionHandle)
                 + "/operations/" + encode(operationHandle) + "/status");
         return flinkRpcClient.get(uri);
+    }
+
+    /**
+     * 解析operation状态
+     *
+     * @param body 状态响应体
+     * @return operation状态
+     */
+    private String parseOperationStatus(String body) {
+        JsonNode node = parseJsonNode(body);
+        if (node == null) {
+            return "";
+        }
+        return node.path("status").asText("").toUpperCase();
+    }
+
+    /**
+     * 判断operation是否为失败终态
+     *
+     * @param status operation状态
+     * @return 是否失败终态
+     */
+    private boolean isTerminalFailedStatus(String status) {
+        return "ERROR".equals(status)
+                || "CANCELED".equals(status)
+                || "CLOSED".equals(status)
+                || "UNKNOWN".equals(status);
     }
 
     /**
