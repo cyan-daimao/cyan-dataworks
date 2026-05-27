@@ -152,12 +152,16 @@ public class ScriptKubernetesJobService {
         int pollTimes = Math.max(configuredPollTimes, pollTimesByTimeout);
         for (int i = 0; i < pollTimes; i++) {
             Job current = kubernetesClient.batch().v1().jobs().inNamespace(namespace).withName(jobName).get();
-            Integer succeeded = current == null || current.getStatus() == null ? 0 : current.getStatus().getSucceeded();
-            Integer failed = current == null || current.getStatus() == null ? 0 : current.getStatus().getFailed();
-            if (succeeded != null && succeeded > 0) {
+            int succeeded = current == null || current.getStatus() == null || current.getStatus().getSucceeded() == null
+                    ? 0
+                    : current.getStatus().getSucceeded();
+            int failed = current == null || current.getStatus() == null || current.getStatus().getFailed() == null
+                    ? 0
+                    : current.getStatus().getFailed();
+            if (succeeded > 0) {
                 return;
             }
-            if (failed != null && failed > 0) {
+            if (failed > 0) {
                 return;
             }
             sleep(intervalMs);
@@ -207,8 +211,10 @@ public class ScriptKubernetesJobService {
      */
     private boolean isJobFailed(String namespace, String jobName) {
         Job current = kubernetesClient.batch().v1().jobs().inNamespace(namespace).withName(jobName).get();
-        Integer failed = current == null || current.getStatus() == null ? 0 : current.getStatus().getFailed();
-        return failed != null && failed > 0;
+        int failed = current == null || current.getStatus() == null || current.getStatus().getFailed() == null
+                ? 0
+                : current.getStatus().getFailed();
+        return failed > 0;
     }
 
     /**
