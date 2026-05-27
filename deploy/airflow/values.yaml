@@ -1,30 +1,63 @@
+
 executor: KubernetesExecutor
 
-airflowVersion: "2.10.5"
+airflowVersion: "2.11.2"
 
 defaultAirflowRepository: apache/airflow
-defaultAirflowTag: "2.10.5-python3.11"
+defaultAirflowTag: "2.11.2-python3.11"
 
 webserver:
   service:
     type: ClusterIP
+ingress:
+  web:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - name: airflow.cyan.com
+        tls:
+          enabled: false
 
 env:
   - name: DATAWORKS_BASE_URL
-    value: "http://cyan-dataworks.pre.svc.cluster.local:8080"
+    value: "http://cyan-dataworks-svc.pre.svc.cluster.local:8080"
   - name: DATAWORKS_DAG_DEFINITION_ENDPOINT
-    value: "/api/v1/data-work/airflow/dag-definitions"
+    value: "/rpc/dataworks/airflow/dag-definitions"
+  - name: AIRFLOW_CONN_DATAWORKS_HTTP
+    value: "http://cyan-dataworks-svc.pre.svc.cluster.local:8080"
+
+extraEnv: |
   - name: DATAWORKS_TOKEN
     valueFrom:
       secretKeyRef:
         name: dataworks-airflow-token
         key: token
-  - name: AIRFLOW_CONN_DATAWORKS_HTTP
-    value: "http://cyan-dataworks.pre.svc.cluster.local:8080"
 
 extraPipPackages:
   - apache-airflow-providers-http
   - requests
+
+volumes:
+  - name: dataworks-airflow-dags
+    configMap:
+      name: dataworks-airflow-dags
+
+volumeMounts:
+  - name: dataworks-airflow-dags
+    mountPath: /opt/airflow/dags/dataworks_dynamic_dag_factory.py
+    subPath: dataworks_dynamic_dag_factory.py
+    readOnly: true
+
+postgresql:
+  primary:
+    persistence:
+      enabled: true
+      storageClass: local-path
+      size: 20Gi
+
+triggerer:
+  persistence:
+    enabled: false
 
 dags:
   persistence:

@@ -121,19 +121,33 @@ public class ScriptKubernetesJobService {
                         .build())
                 .endSpec()
                 .build();
+        log.info("准备创建脚本Kubernetes Job: instanceId={}, type={}, namespace={}, jobName={}, image={}, cpu={}, memory={}, timeoutSeconds={}, ttlSecondsAfterFinished={}",
+                instanceId, type, namespace, jobName, runtimeConfig.getImage(), runtimeConfig.getCpu(), runtimeConfig.getMemory(),
+                runtimeConfig.getTimeoutSeconds(), Optional.ofNullable(properties.getTtlSecondsAfterFinished()).orElse(300));
         kubernetesClient.batch().v1().jobs().inNamespace(namespace).resource(job).create();
+        log.info("脚本Kubernetes Job创建完成: instanceId={}, type={}, namespace={}, jobName={}",
+                instanceId, type, namespace, jobName);
         try {
             waitJobFinished(namespace, jobName, runtimeConfig.getTimeoutSeconds());
             String logs = readJobLogs(namespace, jobName);
             if (isJobFailed(namespace, jobName)) {
+                log.warn("脚本Kubernetes Job执行失败: instanceId={}, type={}, namespace={}, jobName={}, logLength={}",
+                        instanceId, type, namespace, jobName, logs == null ? 0 : logs.length());
                 throw new SilentException(type + "任务执行失败：" + logs);
             }
+            log.info("脚本Kubernetes Job执行成功: instanceId={}, type={}, namespace={}, jobName={}, logLength={}",
+                    instanceId, type, namespace, jobName, logs == null ? 0 : logs.length());
             return logs;
         } finally {
             try {
+                log.info("准备清理脚本Kubernetes Job: instanceId={}, type={}, namespace={}, jobName={}",
+                        instanceId, type, namespace, jobName);
                 kubernetesClient.batch().v1().jobs().inNamespace(namespace).withName(jobName).delete();
+                log.info("脚本Kubernetes Job清理完成: instanceId={}, type={}, namespace={}, jobName={}",
+                        instanceId, type, namespace, jobName);
             } catch (Exception e) {
-                log.warn("清理脚本Kubernetes Job失败: {}", e.getMessage());
+                log.warn("清理脚本Kubernetes Job失败: instanceId={}, type={}, namespace={}, jobName={}, error={}",
+                        instanceId, type, namespace, jobName, e.getMessage());
             }
         }
     }
@@ -159,9 +173,13 @@ public class ScriptKubernetesJobService {
                     ? 0
                     : current.getStatus().getFailed();
             if (succeeded > 0) {
+                log.info("脚本Kubernetes Job已成功完成: namespace={}, jobName={}, succeeded={}, failed={}, pollIndex={}",
+                        namespace, jobName, succeeded, failed, i);
                 return;
             }
             if (failed > 0) {
+                log.warn("脚本Kubernetes Job已失败: namespace={}, jobName={}, succeeded={}, failed={}, pollIndex={}",
+                        namespace, jobName, succeeded, failed, i);
                 return;
             }
             sleep(intervalMs);

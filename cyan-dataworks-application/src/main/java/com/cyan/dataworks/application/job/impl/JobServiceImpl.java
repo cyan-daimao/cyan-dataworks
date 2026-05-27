@@ -163,11 +163,15 @@ public class JobServiceImpl implements JobService {
     public JobBO publish(String id, String updatedBy) {
         Job existing = jobRepository.findById(id);
         Assert.notNull(existing, new SilentException("作业不存在"));
+        log.info("准备发布DataWorks作业: jobId={}, name={}, engineType={}, nodeType={}, status={}, updatedBy={}",
+                existing.getId(), existing.getName(), existing.getEngineType(), existing.getNodeType(), existing.getStatus(), updatedBy);
         validateShellAirflowSchedule(existing);
         existing.setUpdatedBy(updatedBy);
         Job job = existing.publish(jobRepository);
         jobLineageSyncService.sync(job);
         syncFlinkApplicationIfNeeded(job);
+        log.info("DataWorks作业发布完成: jobId={}, name={}, engineType={}, nodeType={}, status={}",
+                job.getId(), job.getName(), job.getEngineType(), job.getNodeType(), job.getStatus());
         return JobAppConvert.INSTANCE.toJobBO(job);
     }
 
@@ -179,11 +183,25 @@ public class JobServiceImpl implements JobService {
             return;
         }
         JobSchedule schedule = jobScheduleRepository.findByJobId(job.getId());
+        log.info("校验Shell作业Airflow调度配置: jobId={}, scheduleExists={}, enabled={}, schedulerType={}, cronExpression={}",
+                job.getId(),
+                schedule != null,
+                schedule == null ? null : schedule.getEnabled(),
+                schedule == null ? null : schedule.getSchedulerType(),
+                schedule == null ? null : schedule.getCronExpression());
         boolean validAirflowSchedule = schedule != null
                 && Boolean.TRUE.equals(schedule.getEnabled())
                 && schedule.getSchedulerType() == SchedulerType.AIRFLOW
                 && schedule.getCronExpression() != null
                 && !schedule.getCronExpression().isBlank();
+        if (!validAirflowSchedule) {
+            log.warn("Shell作业Airflow调度配置无效，拒绝发布: jobId={}, scheduleExists={}, enabled={}, schedulerType={}, cronExpression={}",
+                    job.getId(),
+                    schedule != null,
+                    schedule == null ? null : schedule.getEnabled(),
+                    schedule == null ? null : schedule.getSchedulerType(),
+                    schedule == null ? null : schedule.getCronExpression());
+        }
         Assert.isTrue(validAirflowSchedule, new SilentException("Shell作业发布前请填写Cron并启用Airflow调度"));
     }
 

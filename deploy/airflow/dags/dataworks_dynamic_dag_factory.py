@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 from datetime import datetime
 
 import pendulum
@@ -11,7 +12,8 @@ from airflow.providers.http.operators.http import HttpOperator
 
 DATAWORKS_BASE_URL = os.getenv("DATAWORKS_BASE_URL", "http://cyan-dataworks.pre.svc.cluster.local:8080")
 DATAWORKS_TOKEN = os.getenv("DATAWORKS_TOKEN", "")
-DAG_DEFINITION_ENDPOINT = os.getenv("DATAWORKS_DAG_DEFINITION_ENDPOINT", "/api/v1/data-work/airflow/dag-definitions")
+DAG_DEFINITION_ENDPOINT = os.getenv("DATAWORKS_DAG_DEFINITION_ENDPOINT", "/rpc/dataworks/airflow/dag-definitions")
+LOG = logging.getLogger(__name__)
 
 
 def _headers() -> dict[str, str]:
@@ -22,14 +24,22 @@ def _headers() -> dict[str, str]:
 
 
 def _load_dag_definitions() -> list[dict]:
-    response = requests.get(
-        f"{DATAWORKS_BASE_URL}{DAG_DEFINITION_ENDPOINT}",
-        headers=_headers(),
-        timeout=10,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    return payload.get("data") or []
+    url = f"{DATAWORKS_BASE_URL}{DAG_DEFINITION_ENDPOINT}"
+    LOG.info("Loading DataWorks DAG definitions from %s", url)
+    try:
+        response = requests.get(
+            url,
+            headers=_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception:
+        LOG.exception("Failed to load DataWorks DAG definitions from %s", url)
+        return []
+    definitions = payload.get("data") or []
+    LOG.info("Loaded %s DataWorks DAG definitions", len(definitions))
+    return definitions
 
 
 def _make_task_payload(job_id: str, dag_id: str, task_id: str) -> str:
@@ -47,6 +57,13 @@ def _make_task_payload(job_id: str, dag_id: str, task_id: str) -> str:
 
 for dag_def in _load_dag_definitions():
     dag_id = dag_def["dagId"]
+    LOG.info(
+        "Registering DataWorks DAG: dag_id=%s, job_id=%s, cron=%s, task_count=%s",
+        dag_id,
+        dag_def.get("jobId"),
+        dag_def.get("cronExpression"),
+        len(dag_def.get("tasks") or []),
+    )
     with DAG(
         dag_id=dag_id,
         start_date=datetime(2026, 1, 1, tzinfo=pendulum.timezone("Asia/Shanghai")),
