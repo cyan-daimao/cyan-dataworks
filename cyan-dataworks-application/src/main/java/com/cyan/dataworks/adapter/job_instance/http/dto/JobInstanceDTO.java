@@ -3,6 +3,7 @@ package com.cyan.dataworks.adapter.job_instance.http.dto;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
 import com.cyan.dataworks.enums.SchedulerType;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -130,10 +131,12 @@ public class JobInstanceDTO {
     /**
      * 更新人
      */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private String updatedBy;
 
     /**
      * 更新时间
      */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime updatedAt;
 }

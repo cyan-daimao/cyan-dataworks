@@ -3,6 +3,7 @@ package com.cyan.dataworks.application.job.impl;
 import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.Page;
 import com.cyan.arch.common.api.SilentException;
+import com.cyan.arch.common.util.StrUtils;
 import com.cyan.dataworks.application.job.JobService;
 import com.cyan.dataworks.application.job.bo.JobBO;
 import com.cyan.dataworks.application.job.cmd.JobCmd;
@@ -14,11 +15,13 @@ import com.cyan.dataworks.application.job.lineage.JobLineageSyncService;
 import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.domain.job.query.JobPageQuery;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
+import com.cyan.dataworks.domain.job.schedule.JobSchedule;
 import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
 import com.cyan.dataworks.domain.job_instance.JobInstance;
 import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
+import com.cyan.dataworks.enums.SchedulerType;
 import com.cyan.dataworks.infra.remote.flink.FlinkRemoteService;
 import com.cyan.dataworks.infra.remote.flink.operator.FlinkApplicationOperatorService;
 import com.cyan.dataworks.infra.schedule.ScheduleJobExecutor;
@@ -160,11 +163,28 @@ public class JobServiceImpl implements JobService {
     public JobBO publish(String id, String updatedBy) {
         Job existing = jobRepository.findById(id);
         Assert.notNull(existing, new SilentException("作业不存在"));
+        validateShellAirflowSchedule(existing);
         existing.setUpdatedBy(updatedBy);
         Job job = existing.publish(jobRepository);
         jobLineageSyncService.sync(job);
         syncFlinkApplicationIfNeeded(job);
         return JobAppConvert.INSTANCE.toJobBO(job);
+    }
+
+    /**
+     * Shell作业发布到生产前必须具备启用的Airflow调度，否则Airflow不会生成DAG。
+     */
+    private void validateShellAirflowSchedule(Job job) {
+        if (job.getEngineType() != EngineType.SHELL) {
+            return;
+        }
+        JobSchedule schedule = jobScheduleRepository.findByJobId(job.getId());
+        boolean validAirflowSchedule = schedule != null
+                && Boolean.TRUE.equals(schedule.getEnabled())
+                && schedule.getSchedulerType() == SchedulerType.AIRFLOW
+                && schedule.getCronExpression() != null
+                && !schedule.getCronExpression().isBlank();
+        Assert.isTrue(validAirflowSchedule, new SilentException("Shell作业发布前请填写Cron并启用Airflow调度"));
     }
 
     /**
@@ -246,7 +266,7 @@ public class JobServiceImpl implements JobService {
     private void cleanupFlinkApplicationAndInstances(Job job) {
         JobInstance latestInstance = jobInstanceRepository.findLatestByJobId(job.getId());
         String deploymentName = parseDeploymentName(latestInstance);
-        if (deploymentName != null && !deploymentName.isBlank()) {
+        if (StrUtils.isNotBlank(deploymentName)) {
             String configMapName = parseConfigMapName(latestInstance, deploymentName);
             flinkApplicationOperatorService.delete(deploymentName, configMapName);
             log.info("Flink Job {} 发布前已清理旧 K8s Application: {}", job.getId(), deploymentName);
@@ -299,7 +319,7 @@ public class JobServiceImpl implements JobService {
                 return;
             }
             String deploymentName = parseDeploymentName(latestInstance);
-            if (deploymentName == null || deploymentName.isBlank()) {
+            if (StrUtils.isBlank(deploymentName)) {
                 return;
             }
             String configMapName = parseConfigMapName(latestInstance, deploymentName);

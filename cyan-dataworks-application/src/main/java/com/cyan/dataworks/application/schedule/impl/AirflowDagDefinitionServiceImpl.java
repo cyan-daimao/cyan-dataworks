@@ -6,6 +6,7 @@ import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
 import com.cyan.dataworks.domain.job.schedule.JobSchedule;
 import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
+import com.cyan.dataworks.enums.TaskStatus;
 import com.cyan.dataworks.infra.config.AirflowProperties;
 import org.springframework.stereotype.Service;
 
@@ -66,7 +67,7 @@ public class AirflowDagDefinitionServiceImpl implements AirflowDagDefinitionServ
      */
     private Optional<AirflowDagDefinitionBO> buildDefinition(String prefix, JobSchedule schedule) {
         Job job = jobRepository.findById(schedule.getJobId());
-        if (job == null) {
+        if (job == null || job.getStatus() != TaskStatus.ONLINE) {
             return Optional.empty();
         }
         String taskId = "job_" + job.getId();
