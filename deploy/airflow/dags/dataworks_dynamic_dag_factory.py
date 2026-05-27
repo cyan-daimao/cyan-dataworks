@@ -55,19 +55,42 @@ def _make_task_payload(job_id: str, dag_id: str, task_id: str) -> str:
 """ % (dag_id, task_id)
 
 
+def _normalize_cron_expression(cron_expression: str | None) -> str | None:
+    if not cron_expression:
+        return None
+    raw_parts = cron_expression.strip().split()
+    if not raw_parts:
+        return None
+    parts = [part.replace("?", "*") for part in raw_parts]
+    if len(parts) == 5:
+        if raw_parts[-1].endswith("?"):
+            normalized = [parts[1], parts[2], parts[3], "*", "*"]
+        else:
+            normalized = parts
+    elif len(parts) in (6, 7):
+        normalized = parts[1:6]
+    else:
+        LOG.warning("Unsupported DataWorks cron expression: %s", cron_expression)
+        return None
+    LOG.info("Normalized DataWorks cron expression: raw=%s, normalized=%s", cron_expression, " ".join(normalized))
+    return " ".join(normalized)
+
+
 for dag_def in _load_dag_definitions():
     dag_id = dag_def["dagId"]
+    schedule = _normalize_cron_expression(dag_def.get("cronExpression"))
     LOG.info(
-        "Registering DataWorks DAG: dag_id=%s, job_id=%s, cron=%s, task_count=%s",
+        "Registering DataWorks DAG: dag_id=%s, job_id=%s, raw_cron=%s, schedule=%s, task_count=%s",
         dag_id,
         dag_def.get("jobId"),
         dag_def.get("cronExpression"),
+        schedule,
         len(dag_def.get("tasks") or []),
     )
     with DAG(
         dag_id=dag_id,
         start_date=datetime(2026, 1, 1, tzinfo=pendulum.timezone("Asia/Shanghai")),
-        schedule=dag_def.get("cronExpression"),
+        schedule=schedule,
         catchup=False,
         tags=["dataworks"],
     ) as dag:
