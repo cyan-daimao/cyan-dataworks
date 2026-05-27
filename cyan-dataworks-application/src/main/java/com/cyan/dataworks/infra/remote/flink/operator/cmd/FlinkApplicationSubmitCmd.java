@@ -33,7 +33,7 @@ public class FlinkApplicationSubmitCmd {
     private String configMapName;
 
     /**
-     * FlinkSQL 内容
+     * Flink任务内容
      */
     private String sql;
 

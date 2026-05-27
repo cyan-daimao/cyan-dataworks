@@ -2,6 +2,7 @@ package com.cyan.dataworks.adapter.job_instance.http.dto;
 
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
+import com.cyan.dataworks.enums.SchedulerType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -42,9 +43,9 @@ public class JobInstanceDTO {
     private EngineType engineType;
 
     /**
-     * SQL内容
+     * 任务内容
      */
-    private String sqlContent;
+    private String content;
 
     /**
      * 执行状态
@@ -90,6 +91,31 @@ public class JobInstanceDTO {
      * TaskManager Pod名称列表（JSON）
      */
     private String taskManagerPodNames;
+
+    /**
+     * 调度器类型
+     */
+    private SchedulerType schedulerType;
+
+    /**
+     * 调度器DAG ID
+     */
+    private String schedulerDagId;
+
+    /**
+     * 调度器DAG运行ID
+     */
+    private String schedulerDagRunId;
+
+    /**
+     * 调度器任务ID
+     */
+    private String schedulerTaskId;
+
+    /**
+     * 调度器重试次数
+     */
+    private Integer schedulerTryNumber;
 
     /**
      * 创建人

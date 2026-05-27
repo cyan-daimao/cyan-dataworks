@@ -30,7 +30,7 @@ public class JobExecutionPlanner {
      */
     public String buildExecutableSql(Job job) {
         job.validateDefinition();
-        String sql = job.getSqlContent();
+        String sql = job.getContent();
         if (job.getEngineType() == EngineType.FLINK) {
             return prependIcebergCatalogIfNeeded(sql);
         }

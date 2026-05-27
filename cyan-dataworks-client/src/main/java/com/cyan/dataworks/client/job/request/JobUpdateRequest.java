@@ -40,9 +40,9 @@ public class JobUpdateRequest {
     private NodeType nodeType;
 
     /**
-     * SQL内容
+     * 任务内容
      */
-    private String sqlContent;
+    private String content;
 
     /**
      * 节点配置JSON

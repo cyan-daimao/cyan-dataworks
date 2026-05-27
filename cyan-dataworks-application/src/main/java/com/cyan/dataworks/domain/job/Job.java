@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
  * 数据加工作业（Job）领域对象
  *
  * <p>对标 Spark/Flink 中的 Job 概念：一个 Job 代表一个数据加工任务定义，
- * 包含 SQL 内容、引擎类型、调度配置等元数据。每次手动触发或调度触发会产生一个 JobInstance。</p>
+ * 包含 任务内容、引擎类型、调度配置等元数据。每次手动触发或调度触发会产生一个 JobInstance。</p>
  *
  * @author cy.Y
  * @since 1.0.0
@@ -59,9 +59,9 @@ public class Job {
     private NodeType nodeType;
 
     /**
-     * SQL内容
+     * 任务内容
      */
-    private String sqlContent;
+    private String content;
 
     /**
      * 节点配置JSON
@@ -156,8 +156,9 @@ public class Job {
         fillDefaultEngineType();
         Assert.notNull(this.nodeType, new SilentException("节点类型不能为空"));
         Assert.notNull(this.engineType, new SilentException("引擎类型不能为空"));
+        Assert.notBlank(this.content, new SilentException("任务内容不能为空"));
 //        if (this.nodeType.isSqlNode()) {
-//            SqlPolicy.assertSelectOnly(this.sqlContent);
+//            SqlPolicy.assertSelectOnly(this.content);
 //        }
     }
 
@@ -174,6 +175,14 @@ public class Job {
         }
         if (this.engineType == EngineType.SPARK) {
             this.nodeType = NodeType.SPARK_SQL;
+            return;
+        }
+        if (this.engineType == EngineType.SHELL) {
+            this.nodeType = NodeType.SHELL;
+            return;
+        }
+        if (this.engineType == EngineType.PYTHON) {
+            this.nodeType = NodeType.PYTHON;
         }
     }
 
@@ -184,12 +193,20 @@ public class Job {
         if (this.engineType != null || this.nodeType == null) {
             return;
         }
-        if (this.nodeType == NodeType.FLINK_SQL) {
+        if (this.nodeType == NodeType.FLINK_SQL || this.nodeType == NodeType.FLINK_BATCH) {
             this.engineType = EngineType.FLINK;
             return;
         }
-        if (this.nodeType == NodeType.SPARK_SQL) {
+        if (this.nodeType == NodeType.SPARK_SQL || this.nodeType == NodeType.SPARK_BATCH) {
             this.engineType = EngineType.SPARK;
+            return;
+        }
+        if (this.nodeType == NodeType.SHELL) {
+            this.engineType = EngineType.SHELL;
+            return;
+        }
+        if (this.nodeType == NodeType.PYTHON) {
+            this.engineType = EngineType.PYTHON;
         }
     }
 }

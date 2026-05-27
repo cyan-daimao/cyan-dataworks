@@ -4,6 +4,7 @@ import com.cyan.arch.common.api.Page;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceLogBO;
 import com.cyan.dataworks.application.job_instance.cmd.JobPreviewExecuteCmd;
+import com.cyan.dataworks.application.job_instance.cmd.JobRunBySchedulerCmd;
 import com.cyan.dataworks.domain.job_instance.query.JobInstanceLogQuery;
 import com.cyan.dataworks.domain.job_instance.query.JobInstancePageQuery;
 
@@ -29,6 +30,11 @@ public interface JobInstanceService {
      * 启动正式Application Mode作业
      */
     JobInstanceBO startApplication(String jobId, String createdBy);
+
+    /**
+     * 调度器触发执行作业
+     */
+    JobInstanceBO runByScheduler(String jobId, JobRunBySchedulerCmd cmd);
 
     /**
      * 重试实例（基于原实例重新执行）

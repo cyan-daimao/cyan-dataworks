@@ -35,9 +35,9 @@ public class SqlFieldLineageExtractor {
     /**
      * 提取字段血缘
      */
-    public ExtractResult extract(String sqlContent) {
+    public ExtractResult extract(String content) {
         try {
-            String sql = normalizeSql(sqlContent);
+            String sql = normalizeSql(content);
             Matcher insert = INSERT_SELECT.matcher(sql);
             if (insert.find()) {
                 TableRef target = parseTableRef(insert.group(1));
@@ -204,8 +204,8 @@ public class SqlFieldLineageExtractor {
     /**
      * 清理 SQL
      */
-    private String normalizeSql(String sqlContent) {
-        return sqlContent == null ? "" : sqlContent
+    private String normalizeSql(String content) {
+        return content == null ? "" : content
                 .replaceAll("(?m)--.*$", " ")
                 .replaceAll("(?s)/\\*.*?\\*/", " ")
                 .replaceAll("\\s+", " ")

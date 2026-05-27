@@ -78,7 +78,7 @@ public final class SqlPolicy {
      * 禁止对数仓分层表(ods/dwd/dws/ads)执行 DDL/DML，非分层表的 Flink SQL 允许执行
      */
     public static void assertSelectOnly(String sql) {
-        Assert.notBlank(sql, new SilentException("SQL内容不能为空"));
+        Assert.notBlank(sql, new SilentException("任务内容不能为空"));
         String normalized = sql.trim();
 
         // 1. 禁止对数仓分层表执行 DDL/DML

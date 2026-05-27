@@ -1,0 +1,37 @@
+executor: KubernetesExecutor
+
+airflowVersion: "2.10.5"
+
+defaultAirflowRepository: apache/airflow
+defaultAirflowTag: "2.10.5-python3.11"
+
+webserver:
+  service:
+    type: ClusterIP
+
+env:
+  - name: DATAWORKS_BASE_URL
+    value: "http://cyan-dataworks.pre.svc.cluster.local:8080"
+  - name: DATAWORKS_DAG_DEFINITION_ENDPOINT
+    value: "/api/v1/data-work/airflow/dag-definitions"
+  - name: DATAWORKS_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: dataworks-airflow-token
+        key: token
+  - name: AIRFLOW_CONN_DATAWORKS_HTTP
+    value: "http://cyan-dataworks.pre.svc.cluster.local:8080"
+
+extraPipPackages:
+  - apache-airflow-providers-http
+  - requests
+
+dags:
+  persistence:
+    enabled: false
+  gitSync:
+    enabled: false
+
+config:
+  core:
+    load_examples: "False"

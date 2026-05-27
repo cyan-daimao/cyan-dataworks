@@ -3,6 +3,7 @@ package com.cyan.dataworks.domain.job.schedule;
 import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.SilentException;
 import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
+import com.cyan.dataworks.enums.SchedulerType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -41,6 +42,11 @@ public class JobSchedule {
      * 是否启用
      */
     private Boolean enabled;
+
+    /**
+     * 调度器类型
+     */
+    private SchedulerType schedulerType;
 
     /**
      * 下次执行时间
@@ -82,6 +88,9 @@ public class JobSchedule {
         if (this.enabled == null) {
             this.enabled = false;
         }
+        if (this.schedulerType == null) {
+            this.schedulerType = SchedulerType.AIRFLOW;
+        }
         return repository.save(this);
     }
 
@@ -92,6 +101,9 @@ public class JobSchedule {
         Assert.notBlank(this.id, new SilentException("更新时id不能为空"));
         Assert.notBlank(this.jobId, new SilentException("作业ID不能为空"));
         Assert.notBlank(this.cronExpression, new SilentException("Cron表达式不能为空"));
+        if (this.schedulerType == null) {
+            this.schedulerType = SchedulerType.AIRFLOW;
+        }
         return repository.updateById(this);
     }
 }

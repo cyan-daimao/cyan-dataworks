@@ -41,7 +41,7 @@ public class DataWorksJobRpcController {
                 .setDescription(request.getDescription())
                 .setEngineType(request.getEngineType() != null ? EngineType.valueOf(request.getEngineType().name()) : null)
                 .setNodeType(request.getNodeType() != null ? NodeType.valueOf(request.getNodeType().name()) : null)
-                .setSqlContent(request.getSqlContent())
+                .setContent(request.getContent())
                 .setConfigJson(request.getConfigJson());
         JobBO bo = jobService.save(cmd, createdBy);
         JobDTO dto = JobAdapterConvert.INSTANCE.toJobDTO(bo);

@@ -1,5 +1,6 @@
 package com.cyan.dataworks.adapter.job.schedule.http.dto;
 
+import com.cyan.dataworks.enums.SchedulerType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -38,6 +39,11 @@ public class JobScheduleDTO {
      * 是否启用
      */
     private Boolean enabled;
+
+    /**
+     * 调度器类型
+     */
+    private SchedulerType schedulerType;
 
     /**
      * 下次执行时间

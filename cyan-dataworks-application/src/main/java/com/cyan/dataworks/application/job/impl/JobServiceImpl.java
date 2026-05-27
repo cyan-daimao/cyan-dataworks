@@ -181,7 +181,7 @@ public class JobServiceImpl implements JobService {
                     .setJobId(job.getId())
                     .setJobName(job.getName())
                     .setEngineType(job.getEngineType())
-                    .setSqlContent(executableSql)
+                    .setContent(executableSql)
                     .setStatus(ExecutionStatus.RUNNING)
                     .setCreatedBy(job.getUpdatedBy())
                     .setUpdatedBy(job.getUpdatedBy())

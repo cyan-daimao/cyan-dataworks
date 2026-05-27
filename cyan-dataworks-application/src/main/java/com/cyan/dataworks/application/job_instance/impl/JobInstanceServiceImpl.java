@@ -2,15 +2,16 @@ package com.cyan.dataworks.application.job_instance.impl;
 
 import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.Page;
-import com.cyan.arch.common.api.Response;
 import com.cyan.arch.common.api.SilentException;
-import com.cyan.arch.common.util.JSON;
 import com.cyan.dataworks.application.job_instance.JobInstanceService;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceLogBO;
 import com.cyan.dataworks.application.job_instance.cmd.JobInstanceCmd;
 import com.cyan.dataworks.application.job_instance.cmd.JobPreviewExecuteCmd;
+import com.cyan.dataworks.application.job_instance.cmd.JobRunBySchedulerCmd;
 import com.cyan.dataworks.application.job_instance.convert.JobInstanceAppConvert;
+import com.cyan.dataworks.application.job_instance.executor.JobExecutionResult;
+import com.cyan.dataworks.application.job_instance.executor.JobExecutorRegistry;
 import com.cyan.dataworks.application.job.runtime.JobExecutionPlanner;
 import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfig;
 import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfigParser;
@@ -25,9 +26,6 @@ import com.cyan.dataworks.enums.ExecutionStatus;
 import com.cyan.dataworks.enums.JobLogRole;
 import com.cyan.dataworks.infra.remote.flink.FlinkRemoteService;
 import com.cyan.dataworks.infra.remote.flink.operator.bo.FlinkPodLogBO;
-import com.cyan.datagateway.client.SqlGatewayClient;
-import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
-import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -48,25 +46,25 @@ public class JobInstanceServiceImpl implements JobInstanceService {
 
     private final JobRepository jobRepository;
     private final JobInstanceRepository jobInstanceRepository;
-    private final SqlGatewayClient sqlGatewayClient;
     private final FlinkRemoteService flinkRemoteService;
     private final JobExecutionPlanner jobExecutionPlanner;
     private final FlinkRuntimeConfigParser flinkRuntimeConfigParser;
+    private final JobExecutorRegistry jobExecutorRegistry;
     private final ObjectMapper objectMapper;
 
     public JobInstanceServiceImpl(JobRepository jobRepository,
                                   JobInstanceRepository jobInstanceRepository,
-                                  SqlGatewayClient sqlGatewayClient,
                                   FlinkRemoteService flinkRemoteService,
                                   JobExecutionPlanner jobExecutionPlanner,
                                   FlinkRuntimeConfigParser flinkRuntimeConfigParser,
+                                  JobExecutorRegistry jobExecutorRegistry,
                                   ObjectMapper objectMapper) {
         this.jobRepository = jobRepository;
         this.jobInstanceRepository = jobInstanceRepository;
-        this.sqlGatewayClient = sqlGatewayClient;
         this.flinkRemoteService = flinkRemoteService;
         this.jobExecutionPlanner = jobExecutionPlanner;
         this.flinkRuntimeConfigParser = flinkRuntimeConfigParser;
+        this.jobExecutorRegistry = jobExecutorRegistry;
         this.objectMapper = objectMapper;
     }
 
@@ -79,32 +77,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
         Job job = jobRepository.findById(jobId);
         Assert.notNull(job, new SilentException("作业不存在"));
 
-        String executableSql = jobExecutionPlanner.buildExecutableSql(job);
-        JobInstanceCmd cmd = new JobInstanceCmd()
-                .setJobId(jobId)
-                .setJobName(job.getName())
-                .setEngineType(job.getEngineType())
-                .setSqlContent(executableSql)
-                .setStatus(ExecutionStatus.RUNNING);
-
-        JobInstance instance = JobInstanceAppConvert.INSTANCE.toJobInstance(cmd);
-        instance.setCreatedAt(LocalDateTime.now());
-        instance = instance.save(jobInstanceRepository);
-
-        long startTime = System.currentTimeMillis();
-        try {
-            String resultData;
-            if (job.getEngineType() == EngineType.SPARK) {
-                resultData = executeSparkSql(executableSql);
-            } else {
-                resultData = executeFlinkSql(executableSql);
-            }
-            instance.markSuccess(resultData, System.currentTimeMillis() - startTime, jobInstanceRepository);
-        } catch (Exception e) {
-            instance.markFailed(e.getMessage(), System.currentTimeMillis() - startTime, jobInstanceRepository);
-        }
-
-        return JobInstanceAppConvert.INSTANCE.toJobInstanceBO(instance);
+        return executeJob(job, null);
     }
 
     /**
@@ -118,7 +91,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
                 .setName(cmd.getName() == null || cmd.getName().isBlank() ? "临时任务" : cmd.getName())
                 .setEngineType(cmd.getEngineType())
                 .setNodeType(cmd.getNodeType())
-                .setSqlContent(cmd.getSqlContent())
+                .setContent(cmd.getContent())
                 .setConfigJson(cmd.getConfigJson());
         String executableSql = jobExecutionPlanner.buildExecutableSql(previewJob);
 
@@ -127,19 +100,22 @@ public class JobInstanceServiceImpl implements JobInstanceService {
                 .setJobId("")
                 .setJobName(previewJob.getName())
                 .setEngineType(previewJob.getEngineType())
-                .setSqlContent(executableSql)
+                .setContent(executableSql)
                 .setStatus(ExecutionStatus.RUNNING)
                 .setCreatedBy(createdBy)
                 .setCreatedAt(LocalDateTime.now())
                 .setUpdatedBy(createdBy)
                 .setUpdatedAt(LocalDateTime.now());
         try {
-            String resultData;
-            if (previewJob.getEngineType() == EngineType.SPARK) {
-                resultData = executeSparkSql(executableSql);
-            } else {
-                resultData = executeFlinkSql(executableSql);
-            }
+            Job executeJob = new Job()
+                    .setName(previewJob.getName())
+                    .setEngineType(previewJob.getEngineType())
+                    .setNodeType(previewJob.getNodeType())
+                    .setContent(executableSql)
+                    .setConfigJson(previewJob.getConfigJson());
+            String resultData = jobExecutorRegistry.get(previewJob.getNodeType())
+                    .execute(executeJob, new JobInstance().setId("preview"))
+                    .getResultData();
             result.setStatus(ExecutionStatus.SUCCESS)
                     .setResultData(resultData)
                     .setCostTimeMs(System.currentTimeMillis() - startTime);
@@ -168,7 +144,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
                 .setJobId(jobId)
                 .setJobName(job.getName())
                 .setEngineType(job.getEngineType())
-                .setSqlContent(executableSql)
+                .setContent(executableSql)
                 .setStatus(ExecutionStatus.RUNNING);
         JobInstance instance = JobInstanceAppConvert.INSTANCE.toJobInstance(cmd);
         instance.setCreatedBy(createdBy);
@@ -198,30 +174,67 @@ public class JobInstanceServiceImpl implements JobInstanceService {
         JobInstance original = jobInstanceRepository.findById(instanceId);
         Assert.notNull(original, new SilentException("实例不存在"));
 
-        JobInstanceCmd cmd = new JobInstanceCmd()
-                .setJobId(original.getJobId())
-                .setJobName(original.getJobName())
-                .setEngineType(original.getEngineType())
-                .setSqlContent(original.getSqlContent())
-                .setStatus(ExecutionStatus.RUNNING);
+        Job job = jobRepository.findById(original.getJobId());
+        Assert.notNull(job, new SilentException("原作业不存在"));
+        return executeJob(job, null);
+    }
 
+    /**
+     * 调度器触发执行作业
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public JobInstanceBO runByScheduler(String jobId, JobRunBySchedulerCmd cmd) {
+        Assert.notNull(cmd, new SilentException("调度器执行参数不能为空"));
+        JobInstance existing = jobInstanceRepository.findBySchedulerTrace(cmd.getDagRunId(), cmd.getTaskId(), cmd.getTryNumber());
+        if (existing != null) {
+            return JobInstanceAppConvert.INSTANCE.toJobInstanceBO(existing);
+        }
+        Job job = jobRepository.findById(jobId);
+        Assert.notNull(job, new SilentException("作业不存在"));
+        return executeJob(job, cmd);
+    }
+
+    /**
+     * 创建实例并执行作业
+     */
+    private JobInstanceBO executeJob(Job job, JobRunBySchedulerCmd schedulerCmd) {
+        String snapshotContent = job.getNodeType() != null && job.getNodeType().isSqlNode()
+                ? jobExecutionPlanner.buildExecutableSql(job)
+                : job.getContent();
+        JobInstanceCmd cmd = new JobInstanceCmd()
+                .setJobId(job.getId())
+                .setJobName(job.getName())
+                .setEngineType(job.getEngineType())
+                .setContent(snapshotContent)
+                .setStatus(ExecutionStatus.RUNNING);
+        if (schedulerCmd != null) {
+            cmd.setSchedulerType(schedulerCmd.getSchedulerType())
+                    .setSchedulerDagId(schedulerCmd.getDagId())
+                    .setSchedulerDagRunId(schedulerCmd.getDagRunId())
+                    .setSchedulerTaskId(schedulerCmd.getTaskId())
+                    .setSchedulerTryNumber(schedulerCmd.getTryNumber());
+        }
         JobInstance instance = JobInstanceAppConvert.INSTANCE.toJobInstance(cmd);
         instance.setCreatedAt(LocalDateTime.now());
+        instance.setUpdatedAt(LocalDateTime.now());
         instance = instance.save(jobInstanceRepository);
-
         long startTime = System.currentTimeMillis();
         try {
-            String resultData;
-            if (original.getEngineType() == EngineType.SPARK) {
-                resultData = executeSparkSql(original.getSqlContent());
-            } else {
-                resultData = executeFlinkSql(original.getSqlContent());
-            }
-            instance.markSuccess(resultData, System.currentTimeMillis() - startTime, jobInstanceRepository);
+            Job executeJob = new Job()
+                    .setId(job.getId())
+                    .setName(job.getName())
+                    .setDescription(job.getDescription())
+                    .setEngineType(job.getEngineType())
+                    .setNodeType(job.getNodeType())
+                    .setContent(snapshotContent)
+                    .setConfigJson(job.getConfigJson())
+                    .setStatus(job.getStatus());
+            JobExecutionResult result = jobExecutorRegistry.get(job.getNodeType()).execute(executeJob, instance);
+            instance.markSuccess(result.getResultData(), System.currentTimeMillis() - startTime, jobInstanceRepository);
         } catch (Exception e) {
             instance.markFailed(e.getMessage(), System.currentTimeMillis() - startTime, jobInstanceRepository);
         }
-
         return JobInstanceAppConvert.INSTANCE.toJobInstanceBO(instance);
     }
 
@@ -235,30 +248,6 @@ public class JobInstanceServiceImpl implements JobInstanceService {
         Assert.notNull(instance, new SilentException("实例不存在"));
         instance.terminate(jobInstanceRepository);
         return JobInstanceAppConvert.INSTANCE.toJobInstanceBO(instance);
-    }
-
-    /**
-     * 执行SparkSQL
-     */
-    private String executeSparkSql(String sql) {
-        SqlExecuteCmd cmd = new SqlExecuteCmd();
-        cmd.setSql(sql);
-        Response<SqlExecuteResultDTO> response = sqlGatewayClient.executeSparkSql(cmd);
-        if (response == null || response.getData() == null) {
-            throw new SilentException("SparkSQL执行失败：无响应");
-        }
-        SqlExecuteResultDTO result = response.getData();
-        if (result.getErrorMessage() != null && !result.getErrorMessage().isEmpty()) {
-            throw new SilentException("SparkSQL执行失败：" + result.getErrorMessage());
-        }
-        return JSON.toJSONString(result.getData());
-    }
-
-    /**
-     * 执行FlinkSQL
-     */
-    private String executeFlinkSql(String sql) {
-        return flinkRemoteService.executeSql(sql);
     }
 
     /**

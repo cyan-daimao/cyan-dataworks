@@ -3,6 +3,7 @@ package com.cyan.dataworks.infra.persistence.job.schedule.repository;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.cyan.dataworks.domain.job.schedule.JobSchedule;
 import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
+import com.cyan.dataworks.enums.SchedulerType;
 import com.cyan.dataworks.infra.persistence.job.schedule.convert.JobScheduleInfraConvert;
 import com.cyan.dataworks.infra.persistence.job.schedule.dos.JobScheduleDO;
 import com.cyan.dataworks.infra.persistence.job.schedule.mappers.JobScheduleMapper;
@@ -65,5 +66,17 @@ public class JobScheduleRepositoryImpl implements JobScheduleRepository {
         LambdaQueryWrapper<JobScheduleDO> wrapper = new LambdaQueryWrapper<JobScheduleDO>()
                 .eq(JobScheduleDO::getJobId, com.cyan.arch.common.util.Convert.toLong(jobId));
         jobScheduleMapper.delete(wrapper);
+    }
+
+    /**
+     * 查询已启用的调度配置
+     */
+    @Override
+    public java.util.List<JobSchedule> listEnabled() {
+        LambdaQueryWrapper<JobScheduleDO> wrapper = new LambdaQueryWrapper<JobScheduleDO>()
+                .eq(JobScheduleDO::getEnabled, true)
+                .eq(JobScheduleDO::getSchedulerType, SchedulerType.AIRFLOW);
+        return java.util.Optional.ofNullable(jobScheduleMapper.selectList(wrapper)).orElse(java.util.List.of())
+                .stream().map(JobScheduleInfraConvert.INSTANCE::toJobSchedule).toList();
     }
 }

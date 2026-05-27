@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
+import com.cyan.dataworks.enums.SchedulerType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -52,10 +53,10 @@ public class JobInstanceDO {
     private EngineType engineType;
 
     /**
-     * SQL内容
+     * 任务内容
      */
-    @TableField(value = "sql_content")
-    private String sqlContent;
+    @TableField(value = "content")
+    private String content;
 
     /**
      * 执行状态
@@ -110,6 +111,36 @@ public class JobInstanceDO {
      */
     @TableField(value = "task_manager_pod_names")
     private String taskManagerPodNames;
+
+    /**
+     * 调度器类型
+     */
+    @TableField(value = "scheduler_type")
+    private SchedulerType schedulerType;
+
+    /**
+     * 调度器DAG ID
+     */
+    @TableField(value = "scheduler_dag_id")
+    private String schedulerDagId;
+
+    /**
+     * 调度器DAG运行ID
+     */
+    @TableField(value = "scheduler_dag_run_id")
+    private String schedulerDagRunId;
+
+    /**
+     * 调度器任务ID
+     */
+    @TableField(value = "scheduler_task_id")
+    private String schedulerTaskId;
+
+    /**
+     * 调度器重试次数
+     */
+    @TableField(value = "scheduler_try_number")
+    private Integer schedulerTryNumber;
 
     /**
      * 创建人

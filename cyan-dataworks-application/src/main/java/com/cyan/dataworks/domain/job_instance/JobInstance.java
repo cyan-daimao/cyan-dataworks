@@ -5,6 +5,7 @@ import com.cyan.arch.common.api.SilentException;
 import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
+import com.cyan.dataworks.enums.SchedulerType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -51,9 +52,9 @@ public class JobInstance {
     private EngineType engineType;
 
     /**
-     * SQL内容（快照，记录执行时的 SQL）
+     * 任务内容（快照，记录执行时的 SQL）
      */
-    private String sqlContent;
+    private String content;
 
     /**
      * 执行状态
@@ -101,6 +102,31 @@ public class JobInstance {
     private String taskManagerPodNames;
 
     /**
+     * 调度器类型
+     */
+    private SchedulerType schedulerType;
+
+    /**
+     * 调度器DAG ID
+     */
+    private String schedulerDagId;
+
+    /**
+     * 调度器DAG运行ID
+     */
+    private String schedulerDagRunId;
+
+    /**
+     * 调度器任务ID
+     */
+    private String schedulerTaskId;
+
+    /**
+     * 调度器重试次数
+     */
+    private Integer schedulerTryNumber;
+
+    /**
      * 创建人
      */
     private String createdBy;
@@ -132,7 +158,7 @@ public class JobInstance {
         Assert.isBlank(this.id, new SilentException("新增时id必须为空"));
         Assert.notBlank(this.jobId, new SilentException("作业ID不能为空"));
         Assert.notNull(this.engineType, new SilentException("引擎类型不能为空"));
-        Assert.notBlank(this.sqlContent, new SilentException("SQL内容不能为空"));
+        Assert.notBlank(this.content, new SilentException("任务内容不能为空"));
         Assert.notNull(this.status, new SilentException("执行状态不能为空"));
         return repository.save(this);
     }

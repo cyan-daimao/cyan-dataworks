@@ -65,10 +65,10 @@ public class JobDO {
     private NodeType nodeType;
 
     /**
-     * SQL内容
+     * 任务内容
      */
-    @TableField(value = "sql_content")
-    private String sqlContent;
+    @TableField(value = "content")
+    private String content;
 
     /**
      * 节点配置JSON

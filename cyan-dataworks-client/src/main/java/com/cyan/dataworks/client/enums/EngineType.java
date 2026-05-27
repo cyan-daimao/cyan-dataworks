@@ -21,7 +21,17 @@ public enum EngineType {
     /**
      * FlinkSQL 引擎
      */
-    FLINK("FLINK", "FlinkSQL");
+    FLINK("FLINK", "FlinkSQL"),
+
+    /**
+     * Shell脚本引擎
+     */
+    SHELL("SHELL", "Shell"),
+
+    /**
+     * Python脚本引擎
+     */
+    PYTHON("PYTHON", "Python");
 
     /**
      * 编码

@@ -43,7 +43,7 @@ public class JobLineageSyncService {
         if (job == null || job.getId() == null || job.getId().isBlank()) {
             return;
         }
-        SqlFieldLineageExtractor.ExtractResult result = sqlFieldLineageExtractor.extract(job.getSqlContent());
+        SqlFieldLineageExtractor.ExtractResult result = sqlFieldLineageExtractor.extract(job.getContent());
         String jobKey = "etl_job:dataworks:" + job.getId();
         Map<String, MetadataLineageNodeDTO> nodes = new LinkedHashMap<>();
         List<MetadataLineageEdgeDTO> edges = new ArrayList<>();

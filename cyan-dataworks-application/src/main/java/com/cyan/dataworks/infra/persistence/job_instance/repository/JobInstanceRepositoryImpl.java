@@ -102,4 +102,21 @@ public class JobInstanceRepositoryImpl implements JobInstanceRepository {
         }
         return JobInstanceInfraConvert.INSTANCE.toJobInstance(jobInstanceDO);
     }
+
+    /**
+     * 根据调度器追踪信息查询实例
+     */
+    @Override
+    public JobInstance findBySchedulerTrace(String schedulerDagRunId, String schedulerTaskId, Integer schedulerTryNumber) {
+        LambdaQueryWrapper<JobInstanceDO> wrapper = new LambdaQueryWrapper<JobInstanceDO>()
+                .eq(JobInstanceDO::getSchedulerDagRunId, schedulerDagRunId)
+                .eq(JobInstanceDO::getSchedulerTaskId, schedulerTaskId)
+                .eq(JobInstanceDO::getSchedulerTryNumber, schedulerTryNumber)
+                .last("LIMIT 1");
+        JobInstanceDO jobInstanceDO = jobInstanceMapper.selectOne(wrapper);
+        if (jobInstanceDO == null) {
+            return null;
+        }
+        return JobInstanceInfraConvert.INSTANCE.toJobInstance(jobInstanceDO);
+    }
 }

@@ -1,5 +1,6 @@
 package com.cyan.dataworks.client.job_schedule.request;
 
+import com.cyan.dataworks.client.enums.SchedulerType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -26,4 +27,9 @@ public class JobScheduleSaveRequest {
      * 是否启用
      */
     private Boolean enabled;
+
+    /**
+     * 调度器类型
+     */
+    private SchedulerType schedulerType;
 }

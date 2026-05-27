@@ -44,4 +44,14 @@ public interface JobInstanceRepository {
      * @return 最近的实例
      */
     JobInstance findLatestByJobId(String jobId);
+
+    /**
+     * 根据调度器追踪信息查询实例
+     *
+     * @param schedulerDagRunId 调度器DAG运行ID
+     * @param schedulerTaskId   调度器任务ID
+     * @param schedulerTryNumber 调度器重试次数
+     * @return 作业实例
+     */
+    JobInstance findBySchedulerTrace(String schedulerDagRunId, String schedulerTaskId, Integer schedulerTryNumber);
 }

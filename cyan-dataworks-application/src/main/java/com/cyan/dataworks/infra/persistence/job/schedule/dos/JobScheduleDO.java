@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.cyan.dataworks.enums.SchedulerType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -48,6 +49,12 @@ public class JobScheduleDO {
      */
     @TableField(value = "enabled")
     private Boolean enabled;
+
+    /**
+     * 调度器类型
+     */
+    @TableField(value = "scheduler_type")
+    private SchedulerType schedulerType;
 
     /**
      * 下次执行时间

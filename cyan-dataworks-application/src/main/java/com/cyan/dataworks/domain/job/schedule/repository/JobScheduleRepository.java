@@ -2,6 +2,8 @@ package com.cyan.dataworks.domain.job.schedule.repository;
 
 import com.cyan.dataworks.domain.job.schedule.JobSchedule;
 
+import java.util.List;
+
 /**
  * 作业调度配置仓储接口
  *
@@ -29,4 +31,9 @@ public interface JobScheduleRepository {
      * 根据作业ID删除调度配置
      */
     void deleteByJobId(String jobId);
+
+    /**
+     * 查询已启用的调度配置
+     */
+    List<JobSchedule> listEnabled();
 }

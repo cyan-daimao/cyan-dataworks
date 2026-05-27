@@ -39,10 +39,10 @@ public class JobPreviewExecuteCmd {
     private NodeType nodeType;
 
     /**
-     * SQL内容
+     * 任务内容
      */
-    @NotBlank(message = "SQL内容不能为空")
-    private String sqlContent;
+    @NotBlank(message = "任务内容不能为空")
+    private String content;
 
     /**
      * 节点配置JSON

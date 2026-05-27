@@ -24,6 +24,21 @@ public enum NodeType {
     FLINK_SQL("FLINK_SQL", "FlinkSQL"),
 
     /**
+     * Spark批任务节点
+     */
+    SPARK_BATCH("SPARK_BATCH", "Spark批任务"),
+
+    /**
+     * Flink批任务节点
+     */
+    FLINK_BATCH("FLINK_BATCH", "Flink批任务"),
+
+    /**
+     * Shell脚本节点
+     */
+    SHELL("SHELL", "Shell"),
+
+    /**
      * Python 节点
      */
     PYTHON("PYTHON", "Python"),

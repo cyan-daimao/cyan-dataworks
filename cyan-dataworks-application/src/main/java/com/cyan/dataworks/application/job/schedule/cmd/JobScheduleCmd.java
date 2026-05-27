@@ -1,5 +1,6 @@
 package com.cyan.dataworks.application.job.schedule.cmd;
 
+import com.cyan.dataworks.enums.SchedulerType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -30,4 +31,9 @@ public class JobScheduleCmd {
      */
     @NotNull(message = "启用状态不能为空")
     private Boolean enabled;
+
+    /**
+     * 调度器类型
+     */
+    private SchedulerType schedulerType;
 }
