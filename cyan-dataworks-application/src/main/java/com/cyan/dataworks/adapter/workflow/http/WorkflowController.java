@@ -5,11 +5,13 @@ import com.cyan.arch.common.api.Response;
 import com.cyan.dataworks.adapter.workflow.http.convert.WorkflowAdapterConvert;
 import com.cyan.dataworks.adapter.workflow.http.dto.WorkflowDTO;
 import com.cyan.dataworks.adapter.workflow.http.dto.WorkflowDefinitionDTO;
+import com.cyan.dataworks.adapter.workflow.http.dto.WorkflowDependencyDTO;
 import com.cyan.dataworks.adapter.workflow.http.dto.WorkflowScheduleDTO;
 import com.cyan.dataworks.application.workflow.WorkflowService;
 import com.cyan.dataworks.application.workflow.bo.WorkflowBO;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowCmd;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowDefinitionCmd;
+import com.cyan.dataworks.application.workflow.cmd.WorkflowDependencyCmd;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowScheduleCmd;
 import com.cyan.dataworks.domain.workflow.query.WorkflowPageQuery;
 import com.cyan.dataworks.enums.TaskStatus;
@@ -96,6 +98,20 @@ public class WorkflowController {
                                                           @RequestBody WorkflowDefinitionCmd cmd) {
         return Response.success(WorkflowAdapterConvert.INSTANCE.toDefinitionDTO(
                 workflowService.saveDefinition(id, cmd, UserContextHolder.getCurrentEmployee().getPassport())));
+    }
+
+    /** 查询工作流级依赖 */
+    @GetMapping("/{id}/dependencies")
+    public Response<WorkflowDependencyDTO> findDependencies(@PathVariable String id) {
+        return Response.success(WorkflowAdapterConvert.INSTANCE.toDependencyDTO(workflowService.findDependencies(id)));
+    }
+
+    /** 保存工作流级依赖 */
+    @PutMapping("/{id}/dependencies")
+    public Response<WorkflowDependencyDTO> saveDependencies(@PathVariable String id,
+                                                            @RequestBody WorkflowDependencyCmd cmd) {
+        return Response.success(WorkflowAdapterConvert.INSTANCE.toDependencyDTO(
+                workflowService.saveDependencies(id, cmd, UserContextHolder.getCurrentEmployee().getPassport())));
     }
 
     /** 查询工作流调度配置 */

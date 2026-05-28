@@ -21,4 +21,14 @@ public class JobExecutionResult {
      * 结果数据
      */
     private String resultData;
+
+    /**
+     * 是否已异步提交运行
+     */
+    private Boolean asyncSubmitted;
+
+    /**
+     * 运行时任务名称
+     */
+    private String runtimeJobName;
 }

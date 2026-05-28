@@ -2,10 +2,12 @@ package com.cyan.dataworks.infra.persistence.workflow.convert;
 
 import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.dataworks.domain.workflow.Workflow;
+import com.cyan.dataworks.domain.workflow.WorkflowDependency;
 import com.cyan.dataworks.domain.workflow.WorkflowEdge;
 import com.cyan.dataworks.domain.workflow.WorkflowInstance;
 import com.cyan.dataworks.domain.workflow.WorkflowNode;
 import com.cyan.dataworks.domain.workflow.WorkflowSchedule;
+import com.cyan.dataworks.infra.persistence.workflow.dos.WorkflowDependencyDO;
 import com.cyan.dataworks.infra.persistence.workflow.dos.WorkflowDO;
 import com.cyan.dataworks.infra.persistence.workflow.dos.WorkflowEdgeDO;
 import com.cyan.dataworks.infra.persistence.workflow.dos.WorkflowInstanceDO;
@@ -71,6 +73,22 @@ public interface WorkflowInfraConvert {
     @Mapping(target = "upstreamNodeId", expression = "java(com.cyan.arch.common.util.Convert.toLong(edge.getUpstreamNodeId()))")
     @Mapping(target = "downstreamNodeId", expression = "java(com.cyan.arch.common.util.Convert.toLong(edge.getDownstreamNodeId()))")
     WorkflowEdgeDO toEdgeDO(WorkflowEdge edge);
+
+    /**
+     * DO转工作流级依赖
+     */
+    @Mapping(target = "id", expression = "java(com.cyan.arch.common.util.Convert.toStr(dependencyDO.getId()))")
+    @Mapping(target = "upstreamWorkflowId", expression = "java(com.cyan.arch.common.util.Convert.toStr(dependencyDO.getUpstreamWorkflowId()))")
+    @Mapping(target = "downstreamWorkflowId", expression = "java(com.cyan.arch.common.util.Convert.toStr(dependencyDO.getDownstreamWorkflowId()))")
+    WorkflowDependency toDependency(WorkflowDependencyDO dependencyDO);
+
+    /**
+     * 工作流级依赖转DO
+     */
+    @Mapping(target = "id", expression = "java(com.cyan.arch.common.util.Convert.toLong(dependency.getId()))")
+    @Mapping(target = "upstreamWorkflowId", expression = "java(com.cyan.arch.common.util.Convert.toLong(dependency.getUpstreamWorkflowId()))")
+    @Mapping(target = "downstreamWorkflowId", expression = "java(com.cyan.arch.common.util.Convert.toLong(dependency.getDownstreamWorkflowId()))")
+    WorkflowDependencyDO toDependencyDO(WorkflowDependency dependency);
 
     /**
      * DO转调度配置

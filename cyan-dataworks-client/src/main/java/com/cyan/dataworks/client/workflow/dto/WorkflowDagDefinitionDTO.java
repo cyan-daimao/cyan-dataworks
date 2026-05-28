@@ -47,6 +47,11 @@ public class WorkflowDagDefinitionDTO {
     private List<TaskDTO> tasks;
 
     /**
+     * 外部工作流依赖列表
+     */
+    private List<ExternalDependencyDTO> externalDependencies;
+
+    /**
      * DAG任务DTO
      */
     @Data
@@ -89,5 +94,30 @@ public class WorkflowDagDefinitionDTO {
          * 上游任务ID列表
          */
         private List<String> upstreamTaskIds;
+    }
+
+    /**
+     * 外部工作流依赖DTO
+     */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Accessors(chain = true)
+    public static class ExternalDependencyDTO {
+
+        /**
+         * 上游DAG ID
+         */
+        private String upstreamDagId;
+
+        /**
+         * 上游工作流ID
+         */
+        private String upstreamWorkflowId;
+
+        /**
+         * 上游工作流名称
+         */
+        private String upstreamWorkflowName;
     }
 }

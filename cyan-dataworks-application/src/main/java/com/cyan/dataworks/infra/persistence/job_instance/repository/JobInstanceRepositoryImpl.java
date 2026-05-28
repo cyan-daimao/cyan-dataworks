@@ -119,4 +119,16 @@ public class JobInstanceRepositoryImpl implements JobInstanceRepository {
         }
         return JobInstanceInfraConvert.INSTANCE.toJobInstance(jobInstanceDO);
     }
+
+    /**
+     * 根据工作流实例ID查询实例列表
+     */
+    @Override
+    public List<JobInstance> listByWorkflowInstanceId(String workflowInstanceId) {
+        LambdaQueryWrapper<JobInstanceDO> wrapper = new LambdaQueryWrapper<JobInstanceDO>()
+                .eq(JobInstanceDO::getWorkflowInstanceId, com.cyan.arch.common.util.Convert.toLong(workflowInstanceId))
+                .orderByAsc(JobInstanceDO::getCreatedAt);
+        return Optional.ofNullable(jobInstanceMapper.selectList(wrapper)).orElse(List.of())
+                .stream().map(JobInstanceInfraConvert.INSTANCE::toJobInstance).toList();
+    }
 }

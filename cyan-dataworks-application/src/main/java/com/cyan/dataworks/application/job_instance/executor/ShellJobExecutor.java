@@ -37,6 +37,12 @@ public class ShellJobExecutor implements JobExecutor {
      */
     @Override
     public JobExecutionResult execute(Job job, JobInstance instance) {
-        return new JobExecutionResult().setResultData(scriptKubernetesJobService.runShell(instance.getId(), job.getContent(), job.getConfigJson()));
+        if ("preview".equals(instance.getId())) {
+            return new JobExecutionResult().setResultData(scriptKubernetesJobService.runShell(instance.getId(), job.getContent(), job.getConfigJson()));
+        }
+        String runtimeJobName = scriptKubernetesJobService.submitShell(instance.getId(), job.getContent(), job.getConfigJson());
+        return new JobExecutionResult()
+                .setAsyncSubmitted(true)
+                .setRuntimeJobName(runtimeJobName);
     }
 }

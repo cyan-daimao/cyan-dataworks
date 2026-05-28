@@ -155,6 +155,36 @@ public class JobInstanceDO {
     private Integer schedulerTryNumber;
 
     /**
+     * 运行时Kubernetes Job名称
+     */
+    @TableField(value = "runtime_job_name")
+    private String runtimeJobName;
+
+    /**
+     * RustFS日志对象Key
+     */
+    @TableField(value = "log_object_key")
+    private String logObjectKey;
+
+    /**
+     * 运行开始时间
+     */
+    @TableField(value = "started_at")
+    private LocalDateTime startedAt;
+
+    /**
+     * 运行结束时间
+     */
+    @TableField(value = "finished_at")
+    private LocalDateTime finishedAt;
+
+    /**
+     * 回调时间
+     */
+    @TableField(value = "callback_at")
+    private LocalDateTime callbackAt;
+
+    /**
      * 创建人
      */
     @TableField(value = "created_by")

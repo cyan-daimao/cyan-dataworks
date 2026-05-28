@@ -223,7 +223,11 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                     .setConfigJson(job.getConfigJson())
                     .setStatus(job.getStatus());
             JobExecutionResult result = jobExecutorRegistry.get(job.getNodeType()).execute(executeJob, instance);
-            instance.markSuccess(result.getResultData(), System.currentTimeMillis() - startTime, jobInstanceRepository);
+            if (Boolean.TRUE.equals(result.getAsyncSubmitted())) {
+                instance.bindRuntimeJob(result.getRuntimeJobName(), jobInstanceRepository);
+            } else {
+                instance.markSuccess(result.getResultData(), System.currentTimeMillis() - startTime, jobInstanceRepository);
+            }
         } catch (Exception e) {
             instance.markFailed(e.getMessage(), System.currentTimeMillis() - startTime, jobInstanceRepository);
         }

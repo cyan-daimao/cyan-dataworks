@@ -2,12 +2,14 @@ package com.cyan.dataworks.client.job_instance;
 
 import com.cyan.arch.common.api.Response;
 import com.cyan.dataworks.client.job_instance.dto.JobInstanceDTO;
+import com.cyan.dataworks.client.job_instance.request.JobInstanceCallbackRequest;
 import com.cyan.dataworks.client.job_instance.request.JobRunBySchedulerRequest;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
@@ -44,4 +46,18 @@ public interface DataWorksRpcJobInstanceClient {
      */
     @GetMapping("/{instanceId}")
     Response<JobInstanceDTO> findById(@PathVariable String instanceId);
+
+    /**
+     * 查询调度器等待状态
+     */
+    @GetMapping("/{instanceId}/scheduler-status")
+    Response<JobInstanceDTO> findSchedulerStatus(@PathVariable String instanceId);
+
+    /**
+     * Pod执行完成回调
+     */
+    @PostMapping("/{instanceId}/callback")
+    Response<JobInstanceDTO> callback(@PathVariable String instanceId,
+                                      @RequestHeader("X-DataWorks-Callback-Token") String callbackToken,
+                                      @RequestBody JobInstanceCallbackRequest request);
 }

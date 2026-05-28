@@ -125,4 +125,25 @@ public class WorkflowInstance {
             this.triggerType = WorkflowTriggerType.MANUAL;
         }
     }
+
+    /**
+     * 标记工作流实例成功
+     */
+    public WorkflowInstance markSuccess(WorkflowInstanceRepository repository) {
+        Assert.notBlank(this.id, new SilentException("工作流实例ID不能为空"));
+        this.status = ExecutionStatus.SUCCESS;
+        this.updatedAt = LocalDateTime.now();
+        return repository.updateById(this);
+    }
+
+    /**
+     * 标记工作流实例失败
+     */
+    public WorkflowInstance markFailed(String errorMessage, WorkflowInstanceRepository repository) {
+        Assert.notBlank(this.id, new SilentException("工作流实例ID不能为空"));
+        this.status = ExecutionStatus.FAILED;
+        this.errorMessage = errorMessage;
+        this.updatedAt = LocalDateTime.now();
+        return repository.updateById(this);
+    }
 }

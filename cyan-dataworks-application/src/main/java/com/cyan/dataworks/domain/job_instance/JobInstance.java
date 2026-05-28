@@ -137,6 +137,31 @@ public class JobInstance {
     private Integer schedulerTryNumber;
 
     /**
+     * 运行时Kubernetes Job名称
+     */
+    private String runtimeJobName;
+
+    /**
+     * RustFS日志对象Key
+     */
+    private String logObjectKey;
+
+    /**
+     * 运行开始时间
+     */
+    private LocalDateTime startedAt;
+
+    /**
+     * 运行结束时间
+     */
+    private LocalDateTime finishedAt;
+
+    /**
+     * 回调时间
+     */
+    private LocalDateTime callbackAt;
+
+    /**
      * 创建人
      */
     private String createdBy;
@@ -205,6 +230,66 @@ public class JobInstance {
     }
 
     /**
+     * 绑定运行时任务信息
+     */
+    public JobInstance bindRuntimeJob(String runtimeJobName, JobInstanceRepository repository) {
+        Assert.notBlank(this.id, new SilentException("实例id不能为空"));
+        this.runtimeJobName = runtimeJobName;
+        return repository.updateById(this);
+    }
+
+    /**
+     * 回调标记实例成功
+     */
+    public JobInstance markCallbackSuccess(String resultData,
+                                           String logObjectKey,
+                                           LocalDateTime startedAt,
+                                           LocalDateTime finishedAt,
+                                           LocalDateTime callbackAt,
+                                           JobInstanceRepository repository) {
+        Assert.notBlank(this.id, new SilentException("实例id不能为空"));
+        if (this.status == ExecutionStatus.SUCCESS) {
+            return this;
+        }
+        Assert.isTrue(this.status != ExecutionStatus.FAILED, new SilentException("失败实例不能被回调覆盖为成功"));
+        this.status = ExecutionStatus.SUCCESS;
+        this.resultData = resultData;
+        this.errorMessage = null;
+        this.logObjectKey = logObjectKey;
+        this.startedAt = startedAt;
+        this.finishedAt = finishedAt;
+        this.callbackAt = callbackAt == null ? LocalDateTime.now() : callbackAt;
+        this.costTimeMs = calculateCostTimeMs(startedAt, finishedAt);
+        return repository.updateById(this);
+    }
+
+    /**
+     * 回调标记实例失败
+     */
+    public JobInstance markCallbackFailed(String errorMessage,
+                                          String resultData,
+                                          String logObjectKey,
+                                          LocalDateTime startedAt,
+                                          LocalDateTime finishedAt,
+                                          LocalDateTime callbackAt,
+                                          JobInstanceRepository repository) {
+        Assert.notBlank(this.id, new SilentException("实例id不能为空"));
+        if (this.status == ExecutionStatus.FAILED) {
+            return this;
+        }
+        Assert.isTrue(this.status != ExecutionStatus.SUCCESS, new SilentException("成功实例不能被回调覆盖为失败"));
+        this.status = ExecutionStatus.FAILED;
+        this.errorMessage = errorMessage;
+        this.resultData = resultData;
+        this.logObjectKey = logObjectKey;
+        this.startedAt = startedAt;
+        this.finishedAt = finishedAt;
+        this.callbackAt = callbackAt == null ? LocalDateTime.now() : callbackAt;
+        this.costTimeMs = calculateCostTimeMs(startedAt, finishedAt);
+        return repository.updateById(this);
+    }
+
+    /**
      * 终止实例
      */
     public JobInstance terminate(JobInstanceRepository repository) {
@@ -229,5 +314,15 @@ public class JobInstance {
         this.jobManagerPodName = jobManagerPodName;
         this.taskManagerPodNames = taskManagerPodNames;
         return this;
+    }
+
+    /**
+     * 计算运行耗时
+     */
+    private Long calculateCostTimeMs(LocalDateTime startedAt, LocalDateTime finishedAt) {
+        if (startedAt == null || finishedAt == null) {
+            return this.costTimeMs;
+        }
+        return java.time.Duration.between(startedAt, finishedAt).toMillis();
     }
 }

@@ -3,6 +3,7 @@ package com.cyan.dataworks.application.job_instance;
 import com.cyan.arch.common.api.Page;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceLogBO;
+import com.cyan.dataworks.application.job_instance.cmd.JobInstanceCallbackCmd;
 import com.cyan.dataworks.application.job_instance.cmd.JobPreviewExecuteCmd;
 import com.cyan.dataworks.application.job_instance.cmd.JobRunBySchedulerCmd;
 import com.cyan.dataworks.domain.job_instance.query.JobInstanceLogQuery;
@@ -55,6 +56,16 @@ public interface JobInstanceService {
      * 根据ID查询实例
      */
     JobInstanceBO findById(String id);
+
+    /**
+     * 查询调度器等待状态
+     */
+    JobInstanceBO findSchedulerStatus(String id);
+
+    /**
+     * Pod执行完成回调
+     */
+    JobInstanceBO callback(String id, JobInstanceCallbackCmd cmd, String callbackToken);
 
     /**
      * 查询实例日志

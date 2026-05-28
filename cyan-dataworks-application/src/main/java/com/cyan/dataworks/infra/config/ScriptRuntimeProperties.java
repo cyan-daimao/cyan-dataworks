@@ -23,7 +23,7 @@ public class ScriptRuntimeProperties {
     /**
      * Shell任务镜像
      */
-    private String shellImage = "busybox:1.36";
+    private String shellImage = "python:3.11-slim";
 
     /**
      * Python任务镜像
@@ -59,4 +59,39 @@ public class ScriptRuntimeProperties {
      * 日志轮询间隔毫秒
      */
     private Integer pollIntervalMs = 1000;
+
+    /**
+     * DataWorks回调地址
+     */
+    private String callbackBaseUrl = "http://cyan-dataworks.pre.svc.cluster.local:8080";
+
+    /**
+     * DataWorks回调Token
+     */
+    private String callbackToken = "dataworks-callback-token";
+
+    /**
+     * RustFS访问地址
+     */
+    private String rustfsEndpoint = "http://10.0.0.2:9000";
+
+    /**
+     * RustFS Access Key
+     */
+    private String rustfsAccessKey = "rustfsadmin";
+
+    /**
+     * RustFS Secret Key
+     */
+    private String rustfsSecretKey = "rustfsadmin";
+
+    /**
+     * 脚本日志Bucket
+     */
+    private String logBucket = "dataworks-logs";
+
+    /**
+     * 脚本日志对象前缀
+     */
+    private String logBasePrefix = "script";
 }

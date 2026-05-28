@@ -36,6 +36,9 @@ public class WorkflowDagDefinitionBO {
     /** 任务列表 */
     private List<TaskBO> tasks;
 
+    /** 外部工作流依赖列表 */
+    private List<ExternalDependencyBO> externalDependencies;
+
     /**
      * Airflow任务业务对象
      */
@@ -65,5 +68,24 @@ public class WorkflowDagDefinitionBO {
 
         /** 上游任务ID列表 */
         private List<String> upstreamTaskIds;
+    }
+
+    /**
+     * 外部工作流依赖业务对象
+     */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Accessors(chain = true)
+    public static class ExternalDependencyBO {
+
+        /** 上游DAG ID */
+        private String upstreamDagId;
+
+        /** 上游工作流ID */
+        private String upstreamWorkflowId;
+
+        /** 上游工作流名称 */
+        private String upstreamWorkflowName;
     }
 }

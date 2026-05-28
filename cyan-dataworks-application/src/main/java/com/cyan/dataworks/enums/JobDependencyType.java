@@ -15,7 +15,12 @@ public enum JobDependencyType {
     /**
      * 调度依赖
      */
-    SCHEDULE("SCHEDULE");
+    SCHEDULE("SCHEDULE"),
+
+    /**
+     * 同周期工作流依赖
+     */
+    SCHEDULE_SAME_CYCLE("SCHEDULE_SAME_CYCLE");
 
     /**
      * 存储值

@@ -129,6 +129,34 @@ public class JobInstanceDTO {
     private Integer schedulerTryNumber;
 
     /**
+     * 运行时Kubernetes Job名称
+     */
+    private String runtimeJobName;
+
+    /**
+     * RustFS日志对象Key
+     */
+    private String logObjectKey;
+
+    /**
+     * 运行开始时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime startedAt;
+
+    /**
+     * 运行结束时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime finishedAt;
+
+    /**
+     * 回调时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime callbackAt;
+
+    /**
      * 创建人
      */
     private String createdBy;

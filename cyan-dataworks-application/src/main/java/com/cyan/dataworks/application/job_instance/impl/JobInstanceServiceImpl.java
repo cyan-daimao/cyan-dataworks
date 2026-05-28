@@ -6,6 +6,7 @@ import com.cyan.arch.common.api.SilentException;
 import com.cyan.dataworks.application.job_instance.JobInstanceService;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceLogBO;
+import com.cyan.dataworks.application.job_instance.cmd.JobInstanceCallbackCmd;
 import com.cyan.dataworks.application.job_instance.cmd.JobInstanceCmd;
 import com.cyan.dataworks.application.job_instance.cmd.JobPreviewExecuteCmd;
 import com.cyan.dataworks.application.job_instance.cmd.JobRunBySchedulerCmd;
@@ -21,12 +22,17 @@ import com.cyan.dataworks.domain.job_instance.JobInstance;
 import com.cyan.dataworks.domain.job_instance.query.JobInstanceLogQuery;
 import com.cyan.dataworks.domain.job_instance.query.JobInstancePageQuery;
 import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
+import com.cyan.dataworks.domain.workflow.WorkflowInstance;
+import com.cyan.dataworks.domain.workflow.repository.WorkflowInstanceRepository;
+import com.cyan.dataworks.domain.workflow.repository.WorkflowNodeRepository;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
 import com.cyan.dataworks.enums.JobLogRole;
+import com.cyan.dataworks.infra.config.ScriptRuntimeProperties;
 import com.cyan.dataworks.infra.remote.airflow.AirflowRemoteLogService;
 import com.cyan.dataworks.infra.remote.flink.FlinkRemoteService;
 import com.cyan.dataworks.infra.remote.flink.operator.bo.FlinkPodLogBO;
+import com.cyan.dataworks.infra.remote.rustfs.RustFsLogService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -52,6 +58,10 @@ public class JobInstanceServiceImpl implements JobInstanceService {
     private final FlinkRuntimeConfigParser flinkRuntimeConfigParser;
     private final JobExecutorRegistry jobExecutorRegistry;
     private final AirflowRemoteLogService airflowRemoteLogService;
+    private final RustFsLogService rustFsLogService;
+    private final ScriptRuntimeProperties scriptRuntimeProperties;
+    private final WorkflowInstanceRepository workflowInstanceRepository;
+    private final WorkflowNodeRepository workflowNodeRepository;
     private final ObjectMapper objectMapper;
 
     public JobInstanceServiceImpl(JobRepository jobRepository,
@@ -61,6 +71,10 @@ public class JobInstanceServiceImpl implements JobInstanceService {
                                   FlinkRuntimeConfigParser flinkRuntimeConfigParser,
                                   JobExecutorRegistry jobExecutorRegistry,
                                   AirflowRemoteLogService airflowRemoteLogService,
+                                  RustFsLogService rustFsLogService,
+                                  ScriptRuntimeProperties scriptRuntimeProperties,
+                                  WorkflowInstanceRepository workflowInstanceRepository,
+                                  WorkflowNodeRepository workflowNodeRepository,
                                   ObjectMapper objectMapper) {
         this.jobRepository = jobRepository;
         this.jobInstanceRepository = jobInstanceRepository;
@@ -69,6 +83,10 @@ public class JobInstanceServiceImpl implements JobInstanceService {
         this.flinkRuntimeConfigParser = flinkRuntimeConfigParser;
         this.jobExecutorRegistry = jobExecutorRegistry;
         this.airflowRemoteLogService = airflowRemoteLogService;
+        this.rustFsLogService = rustFsLogService;
+        this.scriptRuntimeProperties = scriptRuntimeProperties;
+        this.workflowInstanceRepository = workflowInstanceRepository;
+        this.workflowNodeRepository = workflowNodeRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -235,7 +253,11 @@ public class JobInstanceServiceImpl implements JobInstanceService {
                     .setConfigJson(job.getConfigJson())
                     .setStatus(job.getStatus());
             JobExecutionResult result = jobExecutorRegistry.get(job.getNodeType()).execute(executeJob, instance);
-            instance.markSuccess(result.getResultData(), System.currentTimeMillis() - startTime, jobInstanceRepository);
+            if (Boolean.TRUE.equals(result.getAsyncSubmitted())) {
+                instance.bindRuntimeJob(result.getRuntimeJobName(), jobInstanceRepository);
+            } else {
+                instance.markSuccess(result.getResultData(), System.currentTimeMillis() - startTime, jobInstanceRepository);
+            }
         } catch (Exception e) {
             instance.markFailed(e.getMessage(), System.currentTimeMillis() - startTime, jobInstanceRepository);
         }
@@ -276,6 +298,37 @@ public class JobInstanceServiceImpl implements JobInstanceService {
     }
 
     /**
+     * 查询调度器等待状态
+     */
+    @Override
+    public JobInstanceBO findSchedulerStatus(String id) {
+        return findById(id);
+    }
+
+    /**
+     * Pod执行完成回调
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public JobInstanceBO callback(String id, JobInstanceCallbackCmd cmd, String callbackToken) {
+        Assert.notNull(cmd, new SilentException("实例回调参数不能为空"));
+        String expectedToken = Optional.ofNullable(scriptRuntimeProperties.getCallbackToken()).orElse("");
+        Assert.isTrue(expectedToken.isBlank() || expectedToken.equals(callbackToken), new SilentException("实例回调Token不合法"));
+        JobInstance instance = jobInstanceRepository.findById(id);
+        Assert.notNull(instance, new SilentException("实例不存在"));
+        ExecutionStatus status = cmd.getStatus();
+        Assert.isTrue(status == ExecutionStatus.SUCCESS || status == ExecutionStatus.FAILED, new SilentException("实例回调状态不合法"));
+        if (status == ExecutionStatus.SUCCESS) {
+            instance = instance.markCallbackSuccess(cmd.getResultData(), cmd.getLogObjectKey(), cmd.getStartedAt(), cmd.getFinishedAt(), LocalDateTime.now(), jobInstanceRepository);
+        } else {
+            String message = Optional.ofNullable(cmd.getErrorMessage()).filter(value -> !value.isBlank()).orElse("脚本任务执行失败，退出码：" + cmd.getExitCode());
+            instance = instance.markCallbackFailed(message, cmd.getResultData(), cmd.getLogObjectKey(), cmd.getStartedAt(), cmd.getFinishedAt(), LocalDateTime.now(), jobInstanceRepository);
+        }
+        syncWorkflowInstanceState(instance);
+        return JobInstanceAppConvert.INSTANCE.toJobInstanceBO(instance);
+    }
+
+    /**
      * 查询实例日志
      */
     @Override
@@ -295,15 +348,21 @@ public class JobInstanceServiceImpl implements JobInstanceService {
                     .setMessage("Airflow远程日志读取成功");
         }
         if (instance.getEngineType() == EngineType.SHELL || instance.getEngineType() == EngineType.PYTHON) {
+            String logs = Optional.ofNullable(instance.getLogObjectKey())
+                    .filter(value -> !value.isBlank())
+                    .map(rustFsLogService::readScriptLog)
+                    .orElseGet(() -> Optional.ofNullable(instance.getResultData())
+                            .filter(value -> !value.isBlank())
+                            .orElse(Optional.ofNullable(instance.getErrorMessage()).orElse("")));
             return new JobInstanceLogBO()
                     .setInstanceId(instance.getId())
-                    .setDeploymentName("")
+                    .setDeploymentName(Optional.ofNullable(instance.getRuntimeJobName()).orElse(""))
                     .setNamespace("rustfs")
                     .setRole(JobLogRole.ALL)
                     .setTailLines(null)
                     .setPods(List.of())
-                    .setLogs("")
-                    .setMessage("实例未关联Airflow远程日志");
+                    .setLogs(logs)
+                    .setMessage(logs == null || logs.isBlank() ? "暂无脚本输出" : "脚本输出读取成功");
         }
         Assert.isTrue(instance.getEngineType() == EngineType.FLINK, new SilentException("只有Flink实例支持查看K8s Pod日志"));
 
@@ -368,6 +427,30 @@ public class JobInstanceServiceImpl implements JobInstanceService {
             return 500;
         }
         return Math.min(tailLines, 5000);
+    }
+
+    /**
+     * 同步本地工作流实例状态
+     */
+    private void syncWorkflowInstanceState(JobInstance instance) {
+        if (instance.getWorkflowInstanceId() == null || instance.getWorkflowInstanceId().isBlank()) {
+            return;
+        }
+        WorkflowInstance workflowInstance = workflowInstanceRepository.findById(instance.getWorkflowInstanceId());
+        if (workflowInstance == null || workflowInstance.getStatus() != ExecutionStatus.RUNNING) {
+            return;
+        }
+        List<JobInstance> instances = jobInstanceRepository.listByWorkflowInstanceId(instance.getWorkflowInstanceId());
+        if (instances.stream().anyMatch(item -> item.getStatus() == ExecutionStatus.FAILED)) {
+            workflowInstance.markFailed(instance.getErrorMessage(), workflowInstanceRepository);
+            return;
+        }
+        int expectedNodeCount = workflowNodeRepository.listByWorkflowId(workflowInstance.getWorkflowId()).size();
+        if (expectedNodeCount > 0
+                && instances.size() >= expectedNodeCount
+                && instances.stream().allMatch(item -> item.getStatus() == ExecutionStatus.SUCCESS)) {
+            workflowInstance.markSuccess(workflowInstanceRepository);
+        }
     }
 
     /**

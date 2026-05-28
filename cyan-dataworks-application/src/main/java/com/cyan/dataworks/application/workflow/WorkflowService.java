@@ -4,9 +4,11 @@ import com.cyan.arch.common.api.Page;
 import com.cyan.dataworks.application.workflow.bo.WorkflowBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowDagDefinitionBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowDefinitionBO;
+import com.cyan.dataworks.application.workflow.bo.WorkflowDependencyBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowScheduleBO;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowCmd;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowDefinitionCmd;
+import com.cyan.dataworks.application.workflow.cmd.WorkflowDependencyCmd;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowScheduleCmd;
 import com.cyan.dataworks.domain.workflow.query.WorkflowPageQuery;
 
@@ -40,6 +42,12 @@ public interface WorkflowService {
 
     /** 保存工作流定义 */
     WorkflowDefinitionBO saveDefinition(String workflowId, WorkflowDefinitionCmd cmd, String updatedBy);
+
+    /** 查询工作流级依赖 */
+    WorkflowDependencyBO findDependencies(String workflowId);
+
+    /** 保存工作流级依赖 */
+    WorkflowDependencyBO saveDependencies(String workflowId, WorkflowDependencyCmd cmd, String updatedBy);
 
     /** 查询工作流调度配置 */
     WorkflowScheduleBO findSchedule(String workflowId);

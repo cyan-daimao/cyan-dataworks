@@ -4,9 +4,11 @@ import com.cyan.arch.common.api.Response;
 import com.cyan.dataworks.adapter.job_instance.http.convert.JobInstanceAdapterConvert;
 import com.cyan.dataworks.application.job_instance.JobInstanceService;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
+import com.cyan.dataworks.application.job_instance.cmd.JobInstanceCallbackCmd;
 import com.cyan.dataworks.application.job_instance.cmd.JobRunBySchedulerCmd;
 import com.cyan.dataworks.client.job_instance.DataWorksRpcJobInstanceClient;
 import com.cyan.dataworks.client.job_instance.dto.JobInstanceDTO;
+import com.cyan.dataworks.client.job_instance.request.JobInstanceCallbackRequest;
 import com.cyan.dataworks.client.job_instance.request.JobRunBySchedulerRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -65,6 +67,31 @@ public class DataWorksJobInstanceRpcController implements DataWorksRpcJobInstanc
     @Override
     public Response<JobInstanceDTO> findById(@PathVariable String instanceId) {
         JobInstanceBO bo = jobInstanceService.findById(instanceId);
+        JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toRpcJobInstanceDTO(bo);
+        return Response.success(dto);
+    }
+
+    /**
+     * 查询调度器等待状态
+     */
+    @GetMapping("/{instanceId}/scheduler-status")
+    @Override
+    public Response<JobInstanceDTO> findSchedulerStatus(@PathVariable String instanceId) {
+        JobInstanceBO bo = jobInstanceService.findSchedulerStatus(instanceId);
+        JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toRpcJobInstanceDTO(bo);
+        return Response.success(dto);
+    }
+
+    /**
+     * Pod执行完成回调
+     */
+    @PostMapping("/{instanceId}/callback")
+    @Override
+    public Response<JobInstanceDTO> callback(@PathVariable String instanceId,
+                                             @RequestHeader("X-DataWorks-Callback-Token") String callbackToken,
+                                             @RequestBody @Valid JobInstanceCallbackRequest request) {
+        JobInstanceCallbackCmd cmd = JobInstanceAdapterConvert.INSTANCE.toJobInstanceCallbackCmd(request);
+        JobInstanceBO bo = jobInstanceService.callback(instanceId, cmd, callbackToken);
         JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toRpcJobInstanceDTO(bo);
         return Response.success(dto);
     }

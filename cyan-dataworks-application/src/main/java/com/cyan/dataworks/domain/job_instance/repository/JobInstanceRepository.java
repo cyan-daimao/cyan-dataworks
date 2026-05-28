@@ -54,4 +54,12 @@ public interface JobInstanceRepository {
      * @return 作业实例
      */
     JobInstance findBySchedulerTrace(String schedulerDagRunId, String schedulerTaskId, Integer schedulerTryNumber);
+
+    /**
+     * 根据工作流实例ID查询实例列表
+     *
+     * @param workflowInstanceId 工作流实例ID
+     * @return 作业实例列表
+     */
+    java.util.List<JobInstance> listByWorkflowInstanceId(String workflowInstanceId);
 }

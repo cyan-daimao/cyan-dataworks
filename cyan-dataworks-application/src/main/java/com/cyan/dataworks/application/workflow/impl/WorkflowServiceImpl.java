@@ -7,18 +7,22 @@ import com.cyan.dataworks.application.workflow.WorkflowService;
 import com.cyan.dataworks.application.workflow.bo.WorkflowBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowDagDefinitionBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowDefinitionBO;
+import com.cyan.dataworks.application.workflow.bo.WorkflowDependencyBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowScheduleBO;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowCmd;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowDefinitionCmd;
+import com.cyan.dataworks.application.workflow.cmd.WorkflowDependencyCmd;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowScheduleCmd;
 import com.cyan.dataworks.application.workflow.convert.WorkflowAppConvert;
 import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
 import com.cyan.dataworks.domain.workflow.Workflow;
+import com.cyan.dataworks.domain.workflow.WorkflowDependency;
 import com.cyan.dataworks.domain.workflow.WorkflowEdge;
 import com.cyan.dataworks.domain.workflow.WorkflowNode;
 import com.cyan.dataworks.domain.workflow.WorkflowSchedule;
 import com.cyan.dataworks.domain.workflow.query.WorkflowPageQuery;
+import com.cyan.dataworks.domain.workflow.repository.WorkflowDependencyRepository;
 import com.cyan.dataworks.domain.workflow.repository.WorkflowEdgeRepository;
 import com.cyan.dataworks.domain.workflow.repository.WorkflowNodeRepository;
 import com.cyan.dataworks.domain.workflow.repository.WorkflowRepository;
@@ -62,6 +66,9 @@ public class WorkflowServiceImpl implements WorkflowService {
     /** 工作流依赖边仓储 */
     private final WorkflowEdgeRepository workflowEdgeRepository;
 
+    /** 工作流级依赖仓储 */
+    private final WorkflowDependencyRepository workflowDependencyRepository;
+
     /** 工作流调度仓储 */
     private final WorkflowScheduleRepository workflowScheduleRepository;
 
@@ -74,12 +81,14 @@ public class WorkflowServiceImpl implements WorkflowService {
     public WorkflowServiceImpl(WorkflowRepository workflowRepository,
                                WorkflowNodeRepository workflowNodeRepository,
                                WorkflowEdgeRepository workflowEdgeRepository,
+                               WorkflowDependencyRepository workflowDependencyRepository,
                                WorkflowScheduleRepository workflowScheduleRepository,
                                JobRepository jobRepository,
                                AirflowOrchestrationGateway airflowGateway) {
         this.workflowRepository = workflowRepository;
         this.workflowNodeRepository = workflowNodeRepository;
         this.workflowEdgeRepository = workflowEdgeRepository;
+        this.workflowDependencyRepository = workflowDependencyRepository;
         this.workflowScheduleRepository = workflowScheduleRepository;
         this.jobRepository = jobRepository;
         this.airflowGateway = airflowGateway;
@@ -146,6 +155,7 @@ public class WorkflowServiceImpl implements WorkflowService {
         Assert.notNull(workflow, new SilentException("工作流不存在"));
         workflow.delete(workflowRepository);
         workflowScheduleRepository.deleteByWorkflowId(id);
+        workflowDependencyRepository.deleteByWorkflowId(id);
         if (workflow.getDagId() != null && !workflow.getDagId().isBlank()) {
             airflowGateway.deleteDag(workflow.getDagId());
         }
@@ -179,6 +189,51 @@ public class WorkflowServiceImpl implements WorkflowService {
         validateAcyclic(savedNodes, edges);
         workflowEdgeRepository.replaceByWorkflowId(workflowId, edges);
         return findDefinition(workflowId);
+    }
+
+    /** 查询工作流级依赖 */
+    @Override
+    public WorkflowDependencyBO findDependencies(String workflowId) {
+        Workflow workflow = workflowRepository.findById(workflowId);
+        Assert.notNull(workflow, new SilentException("工作流不存在"));
+        List<WorkflowBO> upstreamWorkflows = workflowDependencyRepository.listByDownstreamWorkflowId(workflowId).stream()
+                .map(WorkflowDependency::getUpstreamWorkflowId)
+                .map(workflowRepository::findById)
+                .filter(item -> item != null)
+                .map(WorkflowAppConvert.INSTANCE::toWorkflowBO)
+                .toList();
+        List<WorkflowBO> downstreamWorkflows = workflowDependencyRepository.listByUpstreamWorkflowId(workflowId).stream()
+                .map(WorkflowDependency::getDownstreamWorkflowId)
+                .map(workflowRepository::findById)
+                .filter(item -> item != null)
+                .map(WorkflowAppConvert.INSTANCE::toWorkflowBO)
+                .toList();
+        return new WorkflowDependencyBO()
+                .setWorkflowId(workflowId)
+                .setUpstreamWorkflows(upstreamWorkflows)
+                .setDownstreamWorkflows(downstreamWorkflows)
+                .setDependencyType(JobDependencyType.SCHEDULE_SAME_CYCLE);
+    }
+
+    /** 保存工作流级依赖 */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public WorkflowDependencyBO saveDependencies(String workflowId, WorkflowDependencyCmd cmd, String updatedBy) {
+        Workflow workflow = workflowRepository.findById(workflowId);
+        Assert.notNull(workflow, new SilentException("工作流不存在"));
+        List<String> upstreamWorkflowIds = Optional.ofNullable(cmd)
+                .map(WorkflowDependencyCmd::getUpstreamWorkflowIds)
+                .orElse(List.of())
+                .stream()
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .toList();
+        List<WorkflowDependency> dependencies = upstreamWorkflowIds.stream()
+                .map(upstreamWorkflowId -> buildWorkflowDependency(workflowId, upstreamWorkflowId, updatedBy))
+                .toList();
+        validateWorkflowDependencyAcyclic(workflowId, dependencies);
+        workflowDependencyRepository.replaceByDownstreamWorkflowId(workflowId, dependencies);
+        return findDependencies(workflowId);
     }
 
     /** 查询工作流调度配置 */
@@ -397,6 +452,14 @@ public class WorkflowServiceImpl implements WorkflowService {
         WorkflowSchedule schedule = workflowScheduleRepository.findByWorkflowId(workflow.getId());
         Assert.notNull(schedule, new SilentException("工作流发布前请配置调度"));
         validateCronExpression(schedule.getCronExpression());
+        List<WorkflowDependency> workflowDependencies = workflowDependencyRepository.listByDownstreamWorkflowId(workflow.getId());
+        validateWorkflowDependencyAcyclic(workflow.getId(), workflowDependencies);
+        for (WorkflowDependency dependency : workflowDependencies) {
+            Workflow upstream = workflowRepository.findById(dependency.getUpstreamWorkflowId());
+            Assert.notNull(upstream, new SilentException("上游工作流不存在: " + dependency.getUpstreamWorkflowId()));
+            Assert.isTrue(upstream.getStatus() == TaskStatus.ONLINE, new SilentException("上游工作流未发布: " + upstream.getName()));
+            Assert.notBlank(upstream.getDagId(), new SilentException("上游工作流DAG ID为空: " + upstream.getName()));
+        }
         List<WorkflowNode> nodes = workflowNodeRepository.listByWorkflowId(workflow.getId());
         Assert.isTrue(!nodes.isEmpty(), new SilentException("工作流发布前请配置节点"));
         List<WorkflowEdge> edges = workflowEdgeRepository.listByWorkflowId(workflow.getId());
@@ -414,6 +477,15 @@ public class WorkflowServiceImpl implements WorkflowService {
         }
         List<WorkflowNode> nodes = workflowNodeRepository.listByWorkflowId(workflow.getId());
         List<WorkflowEdge> edges = workflowEdgeRepository.listByWorkflowId(workflow.getId());
+        List<WorkflowDagDefinitionBO.ExternalDependencyBO> externalDependencies = workflowDependencyRepository.listByDownstreamWorkflowId(workflow.getId()).stream()
+                .map(WorkflowDependency::getUpstreamWorkflowId)
+                .map(workflowRepository::findById)
+                .filter(upstream -> upstream != null && upstream.getStatus() == TaskStatus.ONLINE)
+                .map(upstream -> new WorkflowDagDefinitionBO.ExternalDependencyBO()
+                        .setUpstreamDagId(upstream.getDagId())
+                        .setUpstreamWorkflowId(upstream.getId())
+                        .setUpstreamWorkflowName(upstream.getName()))
+                .toList();
         Map<String, WorkflowNode> nodeById = nodes.stream()
                 .collect(LinkedHashMap::new, (map, node) -> map.put(node.getId(), node), LinkedHashMap::putAll);
         List<WorkflowDagDefinitionBO.TaskBO> tasks = nodes.stream()
@@ -428,7 +500,32 @@ public class WorkflowServiceImpl implements WorkflowService {
                 .setWorkflowId(workflow.getId())
                 .setWorkflowName(workflow.getName())
                 .setCronExpression(schedule.getCronExpression())
-                .setTasks(tasks));
+                .setTasks(tasks)
+                .setExternalDependencies(externalDependencies));
+    }
+
+    private WorkflowDependency buildWorkflowDependency(String downstreamWorkflowId, String upstreamWorkflowId, String updatedBy) {
+        Workflow upstream = workflowRepository.findById(upstreamWorkflowId);
+        Assert.notNull(upstream, new SilentException("上游工作流不存在: " + upstreamWorkflowId));
+        WorkflowDependency dependency = new WorkflowDependency()
+                .setUpstreamWorkflowId(upstreamWorkflowId)
+                .setDownstreamWorkflowId(downstreamWorkflowId)
+                .setDependencyType(JobDependencyType.SCHEDULE_SAME_CYCLE)
+                .setCreatedBy(updatedBy)
+                .setUpdatedBy(updatedBy);
+        dependency.validateDefinition();
+        return dependency;
+    }
+
+    private void validateWorkflowDependencyAcyclic(String workflowId, List<WorkflowDependency> replacementDependencies) {
+        List<WorkflowDependency> dependencies = new ArrayList<>(workflowDependencyRepository.listAll());
+        dependencies.removeIf(dependency -> workflowId.equals(dependency.getDownstreamWorkflowId()));
+        dependencies.addAll(Optional.ofNullable(replacementDependencies).orElse(List.of()));
+        Map<String, List<String>> graph = new HashMap<>();
+        for (WorkflowDependency dependency : dependencies) {
+            graph.computeIfAbsent(dependency.getUpstreamWorkflowId(), key -> new ArrayList<>()).add(dependency.getDownstreamWorkflowId());
+        }
+        Assert.isTrue(!hasPath(graph, workflowId, workflowId), new SilentException("工作流级依赖关系成环"));
     }
 
     private Optional<WorkflowDagDefinitionBO.TaskBO> buildDagTask(WorkflowNode node,

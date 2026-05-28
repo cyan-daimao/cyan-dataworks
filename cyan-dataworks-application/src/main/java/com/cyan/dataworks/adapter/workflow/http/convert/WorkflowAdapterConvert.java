@@ -6,6 +6,7 @@ import com.cyan.dataworks.adapter.workflow.http.dto.AirflowTaskInstanceDTO;
 import com.cyan.dataworks.adapter.workflow.http.dto.WorkflowDTO;
 import com.cyan.dataworks.adapter.workflow.http.dto.WorkflowDagDefinitionDTO;
 import com.cyan.dataworks.adapter.workflow.http.dto.WorkflowDefinitionDTO;
+import com.cyan.dataworks.adapter.workflow.http.dto.WorkflowDependencyDTO;
 import com.cyan.dataworks.adapter.workflow.http.dto.WorkflowInstanceDTO;
 import com.cyan.dataworks.adapter.workflow.http.dto.WorkflowScheduleDTO;
 import com.cyan.dataworks.application.workflow.bo.AirflowDagRunBO;
@@ -13,6 +14,7 @@ import com.cyan.dataworks.application.workflow.bo.AirflowTaskInstanceBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowDagDefinitionBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowDefinitionBO;
+import com.cyan.dataworks.application.workflow.bo.WorkflowDependencyBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowInstanceBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowScheduleBO;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowRunBySchedulerCmd;
@@ -36,6 +38,9 @@ public interface WorkflowAdapterConvert {
 
     /** 工作流定义BO转DTO */
     WorkflowDefinitionDTO toDefinitionDTO(WorkflowDefinitionBO bo);
+
+    /** 工作流级依赖BO转DTO */
+    WorkflowDependencyDTO toDependencyDTO(WorkflowDependencyBO bo);
 
     /** 工作流DAG定义BO转DTO */
     WorkflowDagDefinitionDTO toDagDefinitionDTO(WorkflowDagDefinitionBO bo);
