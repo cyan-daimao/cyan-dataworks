@@ -1,5 +1,6 @@
 package com.cyan.dataworks.application.job.lineage;
 
+import com.alibaba.fastjson2.JSON;
 import com.cyan.dataman.client.lineage.dto.MetadataLineageEdgeDTO;
 import com.cyan.dataman.client.lineage.dto.MetadataLineageNodeDTO;
 import com.cyan.dataman.client.lineage.request.MetadataLineageSyncRequest;
@@ -26,6 +27,7 @@ public class JobLineageSyncService {
     private static final String NODE_FIELD = "FIELD";
     private static final String EDGE_READS_FIELD = "READS_FIELD";
     private static final String EDGE_WRITES_FIELD = "WRITES_FIELD";
+    private static final String EDGE_SCHEDULE_DEPENDS_ON = "SCHEDULE_DEPENDS_ON";
 
     private final SqlFieldLineageExtractor sqlFieldLineageExtractor;
     private final MetadataLineageGateway metadataLineageGateway;
@@ -86,6 +88,38 @@ public class JobLineageSyncService {
     }
 
     /**
+     * 同步作业调度依赖血缘
+     */
+    public void syncDependencies(Job downstreamJob, List<Job> upstreamJobs) {
+        if (downstreamJob == null || downstreamJob.getId() == null || downstreamJob.getId().isBlank()) {
+            return;
+        }
+        String downstreamJobKey = jobKey(downstreamJob.getId());
+        Map<String, MetadataLineageNodeDTO> nodes = new LinkedHashMap<>();
+        List<MetadataLineageEdgeDTO> edges = new ArrayList<>();
+        nodes.put(downstreamJobKey, toJobNode(downstreamJob));
+        for (Job upstreamJob : upstreamJobs == null ? List.<Job>of() : upstreamJobs) {
+            if (upstreamJob == null || upstreamJob.getId() == null || upstreamJob.getId().isBlank()) {
+                continue;
+            }
+            String upstreamJobKey = jobKey(upstreamJob.getId());
+            nodes.putIfAbsent(upstreamJobKey, toJobNode(upstreamJob));
+            edges.add(new MetadataLineageEdgeDTO()
+                    .setSourceKey(upstreamJobKey)
+                    .setTargetKey(downstreamJobKey)
+                    .setEdgeType(EDGE_SCHEDULE_DEPENDS_ON)
+                    .setServiceName(SERVICE_NAME)
+                    .setRefId(dependencyRefId(downstreamJob.getId()))
+                    .setPropertiesJson(JSON.toJSONString(Map.of("dependencyType", "SCHEDULE"))));
+        }
+        metadataLineageGateway.sync(new MetadataLineageSyncRequest()
+                .setServiceName(SERVICE_NAME)
+                .setRefId(dependencyRefId(downstreamJob.getId()))
+                .setNodes(new ArrayList<>(nodes.values()))
+                .setEdges(edges));
+    }
+
+    /**
      * 转换字段节点
      */
     private MetadataLineageNodeDTO toFieldNode(String fieldKey, SqlFieldLineageExtractor.FieldRef field) {
@@ -96,5 +130,36 @@ public class JobLineageSyncService {
                 .setServiceName(SERVICE_NAME)
                 .setTableRef(SqlFieldLineageExtractor.tableRef(field))
                 .setColumnName(field.column());
+    }
+
+    /**
+     * 转换作业节点
+     */
+    private MetadataLineageNodeDTO toJobNode(Job job) {
+        return new MetadataLineageNodeDTO()
+                .setNodeKey(jobKey(job.getId()))
+                .setNodeType(NODE_ETL_JOB)
+                .setNodeName(job.getName())
+                .setServiceName(SERVICE_NAME)
+                .setRefId(job.getId())
+                .setPropertiesJson(JSON.toJSONString(Map.of(
+                        "engineType", job.getEngineType() == null ? "" : job.getEngineType().name(),
+                        "nodeType", job.getNodeType() == null ? "" : job.getNodeType().name(),
+                        "status", job.getStatus() == null ? "" : job.getStatus().name()
+                )));
+    }
+
+    /**
+     * 作业节点唯一键
+     */
+    private String jobKey(String jobId) {
+        return "etl_job:dataworks:" + jobId;
+    }
+
+    /**
+     * 依赖血缘来源ID
+     */
+    private String dependencyRefId(String downstreamJobId) {
+        return "job:" + downstreamJobId + ":dependencies";
     }
 }

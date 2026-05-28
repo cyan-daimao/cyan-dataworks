@@ -73,3 +73,18 @@ CREATE TABLE IF NOT EXISTS data_work_job_schedule (
     deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     INDEX idx_job_id (job_id) COMMENT '作业ID索引'
 ) COMMENT = '作业调度配置表（新版），对应data_work_job';
+
+CREATE TABLE IF NOT EXISTS data_work_job_dependency (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '作业依赖ID',
+    upstream_job_id BIGINT NOT NULL COMMENT '上游作业ID',
+    downstream_job_id BIGINT NOT NULL COMMENT '下游作业ID',
+    dependency_type VARCHAR(30) NOT NULL DEFAULT 'SCHEDULE' COMMENT '依赖类型：SCHEDULE',
+    created_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '创建人',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '更新人',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    UNIQUE KEY uk_job_dependency (upstream_job_id, downstream_job_id, deleted_at) COMMENT '上下游依赖唯一索引',
+    INDEX idx_upstream_job_id (upstream_job_id) COMMENT '上游作业ID索引',
+    INDEX idx_downstream_job_id (downstream_job_id) COMMENT '下游作业ID索引'
+) COMMENT = '作业依赖关系表，用于Airflow DAG编排和作业血缘';

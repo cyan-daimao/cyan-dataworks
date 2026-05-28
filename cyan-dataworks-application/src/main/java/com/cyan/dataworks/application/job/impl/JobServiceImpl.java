@@ -8,6 +8,7 @@ import com.cyan.dataworks.application.job.JobService;
 import com.cyan.dataworks.application.job.bo.JobBO;
 import com.cyan.dataworks.application.job.cmd.JobCmd;
 import com.cyan.dataworks.application.job.convert.JobAppConvert;
+import com.cyan.dataworks.application.job.dependency.JobDependencyService;
 import com.cyan.dataworks.application.job.runtime.JobExecutionPlanner;
 import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfig;
 import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfigParser;
@@ -54,6 +55,7 @@ public class JobServiceImpl implements JobService {
     private final JobExecutionPlanner jobExecutionPlanner;
     private final FlinkRuntimeConfigParser flinkRuntimeConfigParser;
     private final JobLineageSyncService jobLineageSyncService;
+    private final JobDependencyService jobDependencyService;
     private final ObjectMapper objectMapper;
 
     public JobServiceImpl(JobRepository jobRepository,
@@ -65,6 +67,7 @@ public class JobServiceImpl implements JobService {
                           JobExecutionPlanner jobExecutionPlanner,
                           FlinkRuntimeConfigParser flinkRuntimeConfigParser,
                           JobLineageSyncService jobLineageSyncService,
+                          JobDependencyService jobDependencyService,
                           ObjectMapper objectMapper) {
         this.jobRepository = jobRepository;
         this.jobScheduleRepository = jobScheduleRepository;
@@ -75,6 +78,7 @@ public class JobServiceImpl implements JobService {
         this.jobExecutionPlanner = jobExecutionPlanner;
         this.flinkRuntimeConfigParser = flinkRuntimeConfigParser;
         this.jobLineageSyncService = jobLineageSyncService;
+        this.jobDependencyService = jobDependencyService;
         this.objectMapper = objectMapper;
     }
 
@@ -150,6 +154,7 @@ public class JobServiceImpl implements JobService {
         Job existing = jobRepository.findById(id);
         Assert.notNull(existing, new SilentException("作业不存在"));
         deleteFlinkApplicationIfNeeded(existing);
+        jobDependencyService.deleteByJobId(id);
         existing.delete(jobRepository);
         jobScheduleRepository.deleteByJobId(id);
         scheduleJobExecutor.cancel(id);

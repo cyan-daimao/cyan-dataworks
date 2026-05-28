@@ -81,39 +81,44 @@ def _normalize_cron_expression(cron_expression: str | None) -> str | None:
 
 
 for dag_def in _load_dag_definitions():
-    dag_id = dag_def["dagId"]
-    schedule = _normalize_cron_expression(dag_def.get("cronExpression"))
-    LOG.info(
-        "Registering DataWorks DAG: dag_id=%s, job_id=%s, raw_cron=%s, schedule=%s, task_count=%s",
-        dag_id,
-        dag_def.get("jobId"),
-        dag_def.get("cronExpression"),
-        schedule,
-        len(dag_def.get("tasks") or []),
-    )
-    with DAG(
-        dag_id=dag_id,
-        start_date=datetime(2026, 1, 1, tzinfo=pendulum.timezone("Asia/Shanghai")),
-        schedule=schedule,
-        catchup=False,
-        tags=["dataworks"],
-    ) as dag:
-        tasks = {}
-        for task_def in dag_def.get("tasks") or []:
-            task_id = task_def["taskId"]
-            job_id = task_def["jobId"]
-            tasks[task_id] = HttpOperator(
-                task_id=task_id,
-                http_conn_id="dataworks_http",
-                endpoint=f"/rpc/dataworks/job-instances/{job_id}/run-by-scheduler",
-                method="POST",
-                data=_make_task_payload(job_id, dag_id, task_id),
-                headers={"Content-Type": "application/json", "Accept": "application/json"},
-                response_check=_check_task_response,
-                log_response=True,
-            )
-        for task_def in dag_def.get("tasks") or []:
-            task = tasks[task_def["taskId"]]
-            for upstream_task_id in task_def.get("upstreamTaskIds") or []:
-                tasks[upstream_task_id] >> task
-    globals()[dag_id] = dag
+    try:
+        dag_id = dag_def["dagId"]
+        schedule = _normalize_cron_expression(dag_def.get("cronExpression"))
+        LOG.info(
+            "Registering DataWorks DAG: dag_id=%s, job_id=%s, raw_cron=%s, schedule=%s, task_count=%s",
+            dag_id,
+            dag_def.get("jobId"),
+            dag_def.get("cronExpression"),
+            schedule,
+            len(dag_def.get("tasks") or []),
+        )
+        with DAG(
+            dag_id=dag_id,
+            start_date=datetime(2026, 1, 1, tzinfo=pendulum.timezone("Asia/Shanghai")),
+            schedule=schedule,
+            catchup=False,
+            tags=["dataworks"],
+        ) as dag:
+            tasks = {}
+            for task_def in dag_def.get("tasks") or []:
+                task_id = task_def["taskId"]
+                job_id = task_def["jobId"]
+                tasks[task_id] = HttpOperator(
+                    task_id=task_id,
+                    http_conn_id="dataworks_http",
+                    endpoint=f"/rpc/dataworks/job-instances/{job_id}/run-by-scheduler",
+                    method="POST",
+                    data=_make_task_payload(job_id, dag_id, task_id),
+                    headers={"Content-Type": "application/json", "Accept": "application/json"},
+                    response_check=_check_task_response,
+                    log_response=True,
+                )
+            for task_def in dag_def.get("tasks") or []:
+                task = tasks[task_def["taskId"]]
+                for upstream_task_id in task_def.get("upstreamTaskIds") or []:
+                    if upstream_task_id not in tasks:
+                        raise ValueError(f"Unknown upstream task {upstream_task_id} for task {task_def['taskId']}")
+                    tasks[upstream_task_id] >> task
+        globals()[dag_id] = dag
+    except Exception:
+        LOG.exception("Skip invalid DataWorks DAG definition: %s", dag_def)
