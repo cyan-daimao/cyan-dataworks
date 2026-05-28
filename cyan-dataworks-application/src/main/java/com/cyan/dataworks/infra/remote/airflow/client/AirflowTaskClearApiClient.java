@@ -14,7 +14,7 @@ import java.util.Map;
  * @author cy.Y
  * @since 1.0.0
  */
-@FeignClient(name = "airflow-task-clear-api", contextId = "airflowTaskClearApiClient", url = "${airflow.base-url:}")
+@FeignClient(name = "dataworks-airflow-task-clear-api", contextId = "dataworksAirflowTaskClearApiClient", url = "${airflow.base-url:}")
 public interface AirflowTaskClearApiClient {
 
     /** 清理任务实例以触发重跑 */

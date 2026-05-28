@@ -16,7 +16,7 @@ import java.util.Map;
  * @author cy.Y
  * @since 1.0.0
  */
-@FeignClient(name = "airflow-task-instance-api", contextId = "airflowTaskInstanceApiClient", url = "${airflow.base-url:}")
+@FeignClient(name = "dataworks-airflow-task-instance-api", contextId = "dataworksAirflowTaskInstanceApiClient", url = "${airflow.base-url:}")
 public interface AirflowTaskInstanceApiClient {
 
     /** 查询任务实例列表 */

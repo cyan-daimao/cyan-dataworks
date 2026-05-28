@@ -17,7 +17,7 @@ import java.util.Map;
  * @author cy.Y
  * @since 1.0.0
  */
-@FeignClient(name = "airflow-dag-run-api", contextId = "airflowDagRunApiClient", url = "${airflow.base-url:}")
+@FeignClient(name = "dataworks-airflow-dag-run-api", contextId = "dataworksAirflowDagRunApiClient", url = "${airflow.base-url:}")
 public interface AirflowDagRunApiClient {
 
     /** 触发DAG Run */
