@@ -42,6 +42,16 @@ public class JobInstance {
     private String jobId;
 
     /**
+     * 工作流实例ID
+     */
+    private String workflowInstanceId;
+
+    /**
+     * 工作流节点ID
+     */
+    private String workflowNodeId;
+
+    /**
      * 作业名称（快照，防止 Job 改名后历史记录丢失名称）
      */
     private String jobName;

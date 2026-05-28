@@ -26,6 +26,16 @@ public class JobInstanceCmd {
     private String jobId;
 
     /**
+     * 工作流实例ID
+     */
+    private String workflowInstanceId;
+
+    /**
+     * 工作流节点ID
+     */
+    private String workflowNodeId;
+
+    /**
      * 作业名称
      */
     private String jobName;

@@ -23,6 +23,8 @@ public interface JobInstanceInfraConvert {
      */
     @Mapping(target = "id", expression = "java(com.cyan.arch.common.util.Convert.toStr(jobInstanceDO.getId()))")
     @Mapping(target = "jobId", expression = "java(com.cyan.arch.common.util.Convert.toStr(jobInstanceDO.getJobId()))")
+    @Mapping(target = "workflowInstanceId", expression = "java(com.cyan.arch.common.util.Convert.toStr(jobInstanceDO.getWorkflowInstanceId()))")
+    @Mapping(target = "workflowNodeId", expression = "java(com.cyan.arch.common.util.Convert.toStr(jobInstanceDO.getWorkflowNodeId()))")
     JobInstance toJobInstance(JobInstanceDO jobInstanceDO);
 
     /**
@@ -30,5 +32,7 @@ public interface JobInstanceInfraConvert {
      */
     @Mapping(target = "id", expression = "java(com.cyan.arch.common.util.Convert.toLong(jobInstance.getId()))")
     @Mapping(target = "jobId", expression = "java(com.cyan.arch.common.util.Convert.toLong(jobInstance.getJobId()))")
+    @Mapping(target = "workflowInstanceId", expression = "java(com.cyan.arch.common.util.Convert.toLong(jobInstance.getWorkflowInstanceId()))")
+    @Mapping(target = "workflowNodeId", expression = "java(com.cyan.arch.common.util.Convert.toLong(jobInstance.getWorkflowNodeId()))")
     JobInstanceDO toJobInstanceDO(JobInstance jobInstance);
 }

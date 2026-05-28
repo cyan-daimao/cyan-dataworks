@@ -41,6 +41,18 @@ public class JobInstanceDO {
     private Long jobId;
 
     /**
+     * 工作流实例ID
+     */
+    @TableField(value = "workflow_instance_id")
+    private Long workflowInstanceId;
+
+    /**
+     * 工作流节点ID
+     */
+    @TableField(value = "workflow_node_id")
+    private Long workflowNodeId;
+
+    /**
      * 作业名称
      */
     @TableField(value = "job_name")

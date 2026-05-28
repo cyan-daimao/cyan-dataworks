@@ -11,7 +11,7 @@ from airflow.providers.http.operators.http import HttpOperator
 
 
 DATAWORKS_BASE_URL = os.getenv("DATAWORKS_BASE_URL", "http://cyan-dataworks.pre.svc.cluster.local:8080")
-DAG_DEFINITION_ENDPOINT = os.getenv("DATAWORKS_DAG_DEFINITION_ENDPOINT", "/rpc/dataworks/airflow/dag-definitions")
+DAG_DEFINITION_ENDPOINT = os.getenv("DATAWORKS_DAG_DEFINITION_ENDPOINT", "/rpc/dataworks/airflow/workflow-dag-definitions")
 LOG = logging.getLogger(__name__)
 
 
@@ -33,7 +33,7 @@ def _load_dag_definitions() -> list[dict]:
     return definitions
 
 
-def _make_task_payload(job_id: str, dag_id: str, task_id: str) -> str:
+def _make_task_payload(dag_id: str, task_id: str) -> str:
     return """
 {
   "schedulerType": "AIRFLOW",
@@ -85,9 +85,9 @@ for dag_def in _load_dag_definitions():
         dag_id = dag_def["dagId"]
         schedule = _normalize_cron_expression(dag_def.get("cronExpression"))
         LOG.info(
-            "Registering DataWorks DAG: dag_id=%s, job_id=%s, raw_cron=%s, schedule=%s, task_count=%s",
+            "Registering DataWorks Workflow DAG: dag_id=%s, workflow_id=%s, raw_cron=%s, schedule=%s, task_count=%s",
             dag_id,
-            dag_def.get("jobId"),
+            dag_def.get("workflowId"),
             dag_def.get("cronExpression"),
             schedule,
             len(dag_def.get("tasks") or []),
@@ -103,13 +103,14 @@ for dag_def in _load_dag_definitions():
             tasks = {}
             for task_def in dag_def.get("tasks") or []:
                 task_id = task_def["taskId"]
-                job_id = task_def["jobId"]
+                workflow_id = dag_def["workflowId"]
+                node_id = task_def["nodeId"]
                 tasks[task_id] = HttpOperator(
                     task_id=task_id,
                     http_conn_id="dataworks_http",
-                    endpoint=f"/rpc/dataworks/job-instances/{job_id}/run-by-scheduler",
+                    endpoint=f"/rpc/dataworks/workflows/{workflow_id}/nodes/{node_id}/run-by-scheduler",
                     method="POST",
-                    data=_make_task_payload(job_id, dag_id, task_id),
+                    data=_make_task_payload(dag_id, task_id),
                     headers={"Content-Type": "application/json", "Accept": "application/json"},
                     response_check=_check_task_response,
                     log_response=True,

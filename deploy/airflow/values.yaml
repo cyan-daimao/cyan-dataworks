@@ -22,7 +22,7 @@ env:
   - name: DATAWORKS_BASE_URL
     value: "http://cyan-dataworks-svc.pre.svc.cluster.local:8080"
   - name: DATAWORKS_DAG_DEFINITION_ENDPOINT
-    value: "/rpc/dataworks/airflow/dag-definitions"
+    value: "/rpc/dataworks/airflow/workflow-dag-definitions"
   - name: AIRFLOW_CONN_DATAWORKS_HTTP
     value: "http://cyan-dataworks-svc.pre.svc.cluster.local:8080"
 
