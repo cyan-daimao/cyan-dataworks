@@ -538,11 +538,12 @@ public class WorkflowServiceImpl implements WorkflowService {
         List<String> upstreamTaskIds = edges.stream()
                 .filter(edge -> node.getId().equals(edge.getDownstreamNodeId()))
                 .map(WorkflowEdge::getUpstreamNodeId)
-                .filter(nodeById::containsKey)
+                .map(nodeById::get)
+                .filter(upstreamNode -> upstreamNode != null)
                 .map(this::taskId)
                 .toList();
         return Optional.of(new WorkflowDagDefinitionBO.TaskBO()
-                .setTaskId(taskId(node.getId()))
+                .setTaskId(taskId(node))
                 .setNodeId(node.getId())
                 .setJobId(job.getId())
                 .setJobName(job.getName())
@@ -551,8 +552,9 @@ public class WorkflowServiceImpl implements WorkflowService {
                 .setUpstreamTaskIds(upstreamTaskIds));
     }
 
-    private String taskId(String nodeId) {
-        return "node_" + nodeId;
+    private String taskId(WorkflowNode node) {
+        String taskId = firstNotBlank(node.getNodeCode(), "node_" + node.getId());
+        return taskId.replaceAll("[^A-Za-z0-9_.-]", "_");
     }
 
     private void validateCronExpressionIfEnabled(WorkflowSchedule schedule) {

@@ -232,7 +232,7 @@ public class ScriptKubernetesJobService {
         String callbackBaseUrl = Optional.ofNullable(properties.getCallbackBaseUrl())
                 .filter(value -> !value.isBlank())
                 .map(value -> value.replaceAll("/+$", ""))
-                .orElse("http://cyan-dataworks.pre.svc.cluster.local:8080");
+                .orElse("http://cyan-dataworks-svc.pre.svc.cluster.local:8080");
         Job job = new JobBuilder()
                 .withNewMetadata()
                 .withName(jobName)

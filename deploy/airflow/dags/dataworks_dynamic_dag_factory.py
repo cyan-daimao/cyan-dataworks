@@ -14,7 +14,7 @@ from airflow.sensors.python import PythonSensor
 from airflow.utils.task_group import TaskGroup
 
 
-DATAWORKS_BASE_URL = os.getenv("DATAWORKS_BASE_URL", "http://cyan-dataworks.pre.svc.cluster.local:8080")
+DATAWORKS_BASE_URL = os.getenv("DATAWORKS_BASE_URL", "http://cyan-dataworks-svc.pre.svc.cluster.local:8080")
 DAG_DEFINITION_ENDPOINT = os.getenv("DATAWORKS_DAG_DEFINITION_ENDPOINT", "/rpc/dataworks/airflow/workflow-dag-definitions")
 LOG = logging.getLogger(__name__)
 

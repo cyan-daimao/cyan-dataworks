@@ -63,7 +63,7 @@ public class ScriptRuntimeProperties {
     /**
      * DataWorks回调地址
      */
-    private String callbackBaseUrl = "http://cyan-dataworks.pre.svc.cluster.local:8080";
+    private String callbackBaseUrl = "http://cyan-dataworks-svc.pre.svc.cluster.local:8080";
 
     /**
      * DataWorks回调Token
