@@ -19,5 +19,5 @@ public interface JobScheduleService {
     /**
      * 保存或更新调度配置
      */
-    JobScheduleBO saveOrUpdate(String jobId, JobScheduleCmd cmd);
+    JobScheduleBO saveOrUpdate(String jobId, JobScheduleCmd cmd, String operator);
 }

@@ -5,20 +5,15 @@ import com.cyan.arch.common.api.SilentException;
 import com.cyan.dataworks.application.job.schedule.JobScheduleService;
 import com.cyan.dataworks.application.job.schedule.bo.JobScheduleBO;
 import com.cyan.dataworks.application.job.schedule.cmd.JobScheduleCmd;
-import com.cyan.dataworks.application.job.schedule.convert.JobScheduleAppConvert;
+import com.cyan.dataworks.application.workflow.WorkflowService;
+import com.cyan.dataworks.application.workflow.bo.WorkflowBO;
+import com.cyan.dataworks.application.workflow.bo.WorkflowScheduleBO;
+import com.cyan.dataworks.application.workflow.cmd.WorkflowScheduleCmd;
 import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
-import com.cyan.dataworks.domain.job.schedule.JobSchedule;
-import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
-import com.cyan.dataworks.enums.SchedulerType;
 import com.cyan.dataworks.enums.TaskStatus;
-import com.cyan.dataworks.infra.remote.airflow.AirflowDagStateService;
-import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * 作业调度配置应用服务实现
@@ -29,16 +24,16 @@ import java.util.List;
 @Service
 public class JobScheduleServiceImpl implements JobScheduleService {
 
-    private final JobScheduleRepository jobScheduleRepository;
+    /** 作业仓储 */
     private final JobRepository jobRepository;
-    private final AirflowDagStateService airflowDagStateService;
 
-    public JobScheduleServiceImpl(JobScheduleRepository jobScheduleRepository,
-                                  JobRepository jobRepository,
-                                  AirflowDagStateService airflowDagStateService) {
-        this.jobScheduleRepository = jobScheduleRepository;
+    /** 工作流应用服务 */
+    private final WorkflowService workflowService;
+
+    public JobScheduleServiceImpl(JobRepository jobRepository,
+                                  WorkflowService workflowService) {
         this.jobRepository = jobRepository;
-        this.airflowDagStateService = airflowDagStateService;
+        this.workflowService = workflowService;
     }
 
     /**
@@ -46,11 +41,14 @@ public class JobScheduleServiceImpl implements JobScheduleService {
      */
     @Override
     public JobScheduleBO findByJobId(String jobId) {
-        JobSchedule jobSchedule = jobScheduleRepository.findByJobId(jobId);
-        if (jobSchedule == null) {
+        Job job = jobRepository.findById(jobId);
+        Assert.notNull(job, new SilentException("作业不存在"));
+        WorkflowBO workflow = workflowService.ensureSingleNodeWorkflow(jobId, "system");
+        WorkflowScheduleBO schedule = workflowService.findSchedule(workflow.getId());
+        if (schedule == null) {
             return null;
         }
-        return JobScheduleAppConvert.INSTANCE.toJobScheduleBO(jobSchedule);
+        return toJobScheduleBO(jobId, schedule);
     }
 
     /**
@@ -58,81 +56,27 @@ public class JobScheduleServiceImpl implements JobScheduleService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public JobScheduleBO saveOrUpdate(String jobId, JobScheduleCmd cmd) {
+    public JobScheduleBO saveOrUpdate(String jobId, JobScheduleCmd cmd, String operator) {
         Job job = jobRepository.findById(jobId);
         Assert.notNull(job, new SilentException("作业不存在"));
-
-        JobSchedule existing = jobScheduleRepository.findByJobId(jobId);
-        JobSchedule jobSchedule = JobScheduleAppConvert.INSTANCE.toJobSchedule(cmd);
-        jobSchedule.setJobId(jobId);
-        validateCronExpressionIfEnabled(jobSchedule);
-
-        JobSchedule result;
-        if (existing == null) {
-            result = jobSchedule.save(jobScheduleRepository);
-        } else {
-            jobSchedule.setId(existing.getId());
-            result = jobSchedule.update(jobScheduleRepository);
+        WorkflowBO workflow = workflowService.ensureSingleNodeWorkflow(jobId, operator);
+        WorkflowScheduleBO schedule = workflowService.saveSchedule(workflow.getId(), new WorkflowScheduleCmd()
+                .setCronExpression(cmd.getCronExpression())
+                .setEnabled(cmd.getEnabled())
+                .setSchedulerType(cmd.getSchedulerType()), operator);
+        if (job.getStatus() == TaskStatus.ONLINE) {
+            workflowService.publish(workflow.getId(), operator);
         }
-        syncAirflowDagStateIfNeeded(job, result);
-
-        return JobScheduleAppConvert.INSTANCE.toJobScheduleBO(result);
+        return toJobScheduleBO(jobId, schedule);
     }
 
-    /**
-     * 同步Airflow DAG暂停状态
-     */
-    private void syncAirflowDagStateIfNeeded(Job job, JobSchedule jobSchedule) {
-        if (job.getStatus() != TaskStatus.ONLINE) {
-            return;
-        }
-        if (jobSchedule.getSchedulerType() != SchedulerType.AIRFLOW) {
-            return;
-        }
-        airflowDagStateService.syncJobDagPaused(job, !Boolean.TRUE.equals(jobSchedule.getEnabled()), true);
-    }
-
-    /**
-     * 启用调度时校验Cron表达式
-     */
-    private void validateCronExpressionIfEnabled(JobSchedule jobSchedule) {
-        if (!Boolean.TRUE.equals(jobSchedule.getEnabled())) {
-            return;
-        }
-        String normalizedCron = normalizeToAirflowCron(jobSchedule.getCronExpression());
-        Assert.notBlank(normalizedCron, new SilentException("Cron表达式不合法"));
-        try {
-            CronExpression.parse("0 " + normalizedCron);
-        } catch (IllegalArgumentException e) {
-            throw new SilentException("Cron表达式不合法，请检查格式: " + jobSchedule.getCronExpression());
-        }
-    }
-
-    /**
-     * 归一化为Airflow 5段Cron表达式
-     */
-    private String normalizeToAirflowCron(String cronExpression) {
-        if (cronExpression == null || cronExpression.isBlank()) {
-            return null;
-        }
-        List<String> rawParts = Arrays.stream(cronExpression.trim().split("\\s+"))
-                .filter(part -> !part.isBlank())
-                .toList();
-        if (rawParts.isEmpty()) {
-            return null;
-        }
-        List<String> parts = rawParts.stream()
-                .map(part -> part.replace("?", "*").replace("？", "*"))
-                .toList();
-        if (parts.size() == 5) {
-            if (rawParts.get(4).endsWith("?") || rawParts.get(4).endsWith("？")) {
-                return String.join(" ", parts.get(1), parts.get(2), parts.get(3), "*", "*");
-            }
-            return String.join(" ", parts);
-        }
-        if (parts.size() == 6 || parts.size() == 7) {
-            return String.join(" ", parts.subList(1, 6));
-        }
-        return null;
+    private JobScheduleBO toJobScheduleBO(String jobId, WorkflowScheduleBO schedule) {
+        return new JobScheduleBO()
+                .setId(schedule.getId())
+                .setJobId(jobId)
+                .setCronExpression(schedule.getCronExpression())
+                .setEnabled(schedule.getEnabled())
+                .setSchedulerType(schedule.getSchedulerType())
+                .setNextExecuteTime(schedule.getNextExecuteTime());
     }
 }

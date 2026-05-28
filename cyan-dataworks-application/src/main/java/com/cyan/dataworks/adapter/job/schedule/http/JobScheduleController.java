@@ -6,6 +6,7 @@ import com.cyan.dataworks.adapter.job.schedule.http.dto.JobScheduleDTO;
 import com.cyan.dataworks.application.job.schedule.JobScheduleService;
 import com.cyan.dataworks.application.job.schedule.bo.JobScheduleBO;
 import com.cyan.dataworks.application.job.schedule.cmd.JobScheduleCmd;
+import com.cyan.employee.login.filter.UserContextHolder;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
@@ -44,7 +45,7 @@ public class JobScheduleController {
     @PutMapping
     public Response<JobScheduleDTO> saveOrUpdate(@PathVariable String jobId,
                                                   @RequestBody @Valid JobScheduleCmd cmd) {
-        JobScheduleBO bo = jobScheduleService.saveOrUpdate(jobId, cmd);
+        JobScheduleBO bo = jobScheduleService.saveOrUpdate(jobId, cmd, UserContextHolder.getCurrentEmployee().getPassport());
         JobScheduleDTO dto = JobScheduleAdapterConvert.INSTANCE.toJobScheduleDTO(bo);
         return Response.success(dto);
     }

@@ -14,6 +14,7 @@ import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfig;
 import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfigParser;
 import com.cyan.dataworks.application.job.lineage.JobLineageSyncService;
 import com.cyan.dataworks.application.workflow.WorkflowService;
+import com.cyan.dataworks.application.workflow.bo.WorkflowBO;
 import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.domain.job.query.JobPageQuery;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
@@ -167,9 +168,25 @@ public class JobServiceImpl implements JobService {
         existing.setUpdatedBy(updatedBy);
         Job job = existing.publish(jobRepository);
         jobLineageSyncService.sync(job);
+        publishDefaultWorkflowIfSchedulable(job, updatedBy);
         log.info("DataWorks作业发布完成: jobId={}, name={}, engineType={}, nodeType={}, status={}",
                 job.getId(), job.getName(), job.getEngineType(), job.getNodeType(), job.getStatus());
         return JobAppConvert.INSTANCE.toJobBO(job);
+    }
+
+    /**
+     * 若单节点工作流已配置调度，则随作业发布一并发布工作流。
+     */
+    private void publishDefaultWorkflowIfSchedulable(Job job, String updatedBy) {
+        try {
+            WorkflowBO workflow = workflowService.ensureSingleNodeWorkflow(job.getId(), updatedBy);
+            if (workflowService.findSchedule(workflow.getId()) == null) {
+                return;
+            }
+            workflowService.publish(workflow.getId(), updatedBy);
+        } catch (Exception e) {
+            log.warn("DataWorks作业默认单节点工作流发布跳过: jobId={}, reason={}", job.getId(), e.getMessage());
+        }
     }
 
     /**
