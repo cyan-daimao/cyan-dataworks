@@ -30,7 +30,8 @@ public class JobScheduleRepositoryImpl implements JobScheduleRepository {
     @Override
     public JobSchedule findByJobId(String jobId) {
         LambdaQueryWrapper<JobScheduleDO> wrapper = new LambdaQueryWrapper<JobScheduleDO>()
-                .eq(JobScheduleDO::getJobId, com.cyan.arch.common.util.Convert.toLong(jobId));
+                .eq(JobScheduleDO::getJobId, com.cyan.arch.common.util.Convert.toLong(jobId))
+                .last("LIMIT 1");
         JobScheduleDO jobScheduleDO = jobScheduleMapper.selectOne(wrapper);
         if (jobScheduleDO == null) {
             return null;
@@ -63,9 +64,7 @@ public class JobScheduleRepositoryImpl implements JobScheduleRepository {
      */
     @Override
     public void deleteByJobId(String jobId) {
-        LambdaQueryWrapper<JobScheduleDO> wrapper = new LambdaQueryWrapper<JobScheduleDO>()
-                .eq(JobScheduleDO::getJobId, com.cyan.arch.common.util.Convert.toLong(jobId));
-        jobScheduleMapper.delete(wrapper);
+        jobScheduleMapper.softDeleteByJobId(com.cyan.arch.common.util.Convert.toLong(jobId));
     }
 
     /**

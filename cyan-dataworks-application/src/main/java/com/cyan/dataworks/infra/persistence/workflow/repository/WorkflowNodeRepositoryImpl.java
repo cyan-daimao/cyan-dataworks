@@ -54,8 +54,7 @@ public class WorkflowNodeRepositoryImpl implements WorkflowNodeRepository {
      */
     @Override
     public List<WorkflowNode> replaceByWorkflowId(String workflowId, List<WorkflowNode> nodes) {
-        workflowNodeMapper.delete(new LambdaQueryWrapper<WorkflowNodeDO>()
-                .eq(WorkflowNodeDO::getWorkflowId, Convert.toLong(workflowId)));
+        workflowNodeMapper.softDeleteByWorkflowId(Convert.toLong(workflowId));
         for (WorkflowNode node : Optional.ofNullable(nodes).orElse(List.of())) {
             WorkflowNodeDO nodeDO = WorkflowInfraConvert.INSTANCE.toNodeDO(node);
             workflowNodeMapper.insert(nodeDO);

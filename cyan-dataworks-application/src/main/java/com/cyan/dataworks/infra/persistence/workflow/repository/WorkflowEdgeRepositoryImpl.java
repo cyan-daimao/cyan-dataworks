@@ -45,8 +45,7 @@ public class WorkflowEdgeRepositoryImpl implements WorkflowEdgeRepository {
      */
     @Override
     public List<WorkflowEdge> replaceByWorkflowId(String workflowId, List<WorkflowEdge> edges) {
-        workflowEdgeMapper.delete(new LambdaQueryWrapper<WorkflowEdgeDO>()
-                .eq(WorkflowEdgeDO::getWorkflowId, Convert.toLong(workflowId)));
+        workflowEdgeMapper.softDeleteByWorkflowId(Convert.toLong(workflowId));
         for (WorkflowEdge edge : Optional.ofNullable(edges).orElse(List.of())) {
             WorkflowEdgeDO edgeDO = WorkflowInfraConvert.INSTANCE.toEdgeDO(edge);
             workflowEdgeMapper.insert(edgeDO);

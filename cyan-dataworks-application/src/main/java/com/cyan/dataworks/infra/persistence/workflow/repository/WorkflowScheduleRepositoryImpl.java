@@ -76,7 +76,6 @@ public class WorkflowScheduleRepositoryImpl implements WorkflowScheduleRepositor
      */
     @Override
     public void deleteByWorkflowId(String workflowId) {
-        workflowScheduleMapper.delete(new LambdaQueryWrapper<WorkflowScheduleDO>()
-                .eq(WorkflowScheduleDO::getWorkflowId, Convert.toLong(workflowId)));
+        workflowScheduleMapper.softDeleteByWorkflowId(Convert.toLong(workflowId));
     }
 }

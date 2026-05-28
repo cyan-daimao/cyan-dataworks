@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS task_folder (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '更新人',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    deleted_at DATETIME(6) DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     INDEX idx_parent_id (parent_id) COMMENT '父文件夹索引，用于树形查询'
 ) COMMENT = '任务文件夹表，用于对数据加工任务进行分组组织';
 
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS data_work_job (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_by VARCHAR(100) NOT NULL COMMENT '更新人',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    deleted_at DATETIME(6) DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     INDEX idx_folder_id (folder_id) COMMENT '文件夹索引',
     INDEX idx_name (name) COMMENT '作业名称索引，用于模糊搜索',
     INDEX idx_engine_type (engine_type) COMMENT '引擎类型索引，用于筛选'
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS data_work_job_instance (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间，即执行开始时间',
     updated_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '更新人',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    deleted_at DATETIME(6) DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     INDEX idx_job_id (job_id) COMMENT '作业ID索引，用于按作业查询实例',
     INDEX idx_workflow_instance_id (workflow_instance_id) COMMENT '工作流实例ID索引',
     INDEX idx_workflow_node_id (workflow_node_id) COMMENT '工作流节点ID索引',
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS data_work_workflow (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '更新人',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    deleted_at DATETIME(6) DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     INDEX idx_name (name) COMMENT '工作流名称索引',
     INDEX idx_dag_id (dag_id) COMMENT 'DAG ID索引',
     INDEX idx_workflow_type (workflow_type) COMMENT '工作流类型索引'
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS data_work_workflow_node (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '更新人',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    deleted_at DATETIME(6) DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     UNIQUE KEY uk_workflow_node_code (workflow_id, node_code, deleted_at) COMMENT '工作流内节点编码唯一',
     INDEX idx_workflow_id (workflow_id) COMMENT '工作流ID索引',
     INDEX idx_job_id (job_id) COMMENT '作业ID索引'
@@ -111,14 +111,14 @@ CREATE TABLE IF NOT EXISTS data_work_workflow_edge (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '更新人',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    deleted_at DATETIME(6) DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     UNIQUE KEY uk_workflow_edge (workflow_id, upstream_node_code, downstream_node_code, deleted_at) COMMENT '工作流依赖边唯一',
     INDEX idx_workflow_id (workflow_id) COMMENT '工作流ID索引'
 ) COMMENT = '工作流依赖边表';
 
 CREATE TABLE IF NOT EXISTS data_work_workflow_schedule (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '工作流调度配置ID',
-    workflow_id BIGINT NOT NULL UNIQUE COMMENT '工作流ID',
+    workflow_id BIGINT NOT NULL COMMENT '工作流ID',
     cron_expression VARCHAR(100) NOT NULL COMMENT 'Cron表达式',
     enabled BOOLEAN DEFAULT FALSE COMMENT '是否启用',
     scheduler_type VARCHAR(20) DEFAULT 'AIRFLOW' COMMENT '调度器类型：INTERNAL / AIRFLOW',
@@ -127,7 +127,8 @@ CREATE TABLE IF NOT EXISTS data_work_workflow_schedule (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '更新人',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    deleted_at DATETIME(6) DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    UNIQUE KEY uk_workflow_schedule_workflow (workflow_id, deleted_at) COMMENT '工作流调度配置唯一',
     INDEX idx_workflow_id (workflow_id) COMMENT '工作流ID索引'
 ) COMMENT = '工作流调度配置表';
 
@@ -145,7 +146,7 @@ CREATE TABLE IF NOT EXISTS data_work_workflow_instance (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '更新人',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    deleted_at DATETIME(6) DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     UNIQUE KEY uk_workflow_dag_run (dag_id, dag_run_id, deleted_at) COMMENT 'DAG Run唯一索引',
     INDEX idx_workflow_id (workflow_id) COMMENT '工作流ID索引',
     INDEX idx_created_at (created_at) COMMENT '创建时间索引'
@@ -153,7 +154,7 @@ CREATE TABLE IF NOT EXISTS data_work_workflow_instance (
 
 CREATE TABLE IF NOT EXISTS data_work_job_schedule (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '调度配置ID',
-    job_id BIGINT NOT NULL UNIQUE COMMENT '关联的作业ID',
+    job_id BIGINT NOT NULL COMMENT '关联的作业ID',
     cron_expression VARCHAR(100) NOT NULL COMMENT 'Cron表达式',
     enabled BOOLEAN DEFAULT FALSE COMMENT '是否启用',
     scheduler_type VARCHAR(20) DEFAULT 'AIRFLOW' COMMENT '调度器类型：INTERNAL / AIRFLOW',
@@ -162,7 +163,8 @@ CREATE TABLE IF NOT EXISTS data_work_job_schedule (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '更新人',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    deleted_at DATETIME(6) DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    UNIQUE KEY uk_job_schedule_job (job_id, deleted_at) COMMENT '作业调度配置唯一',
     INDEX idx_job_id (job_id) COMMENT '作业ID索引'
 ) COMMENT = '作业调度配置表（新版），对应data_work_job';
 
@@ -175,7 +177,7 @@ CREATE TABLE IF NOT EXISTS data_work_job_dependency (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '更新人',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted_at DATETIME DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
+    deleted_at DATETIME(6) DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     UNIQUE KEY uk_job_dependency (upstream_job_id, downstream_job_id, deleted_at) COMMENT '上下游依赖唯一索引',
     INDEX idx_upstream_job_id (upstream_job_id) COMMENT '上游作业ID索引',
     INDEX idx_downstream_job_id (downstream_job_id) COMMENT '下游作业ID索引'

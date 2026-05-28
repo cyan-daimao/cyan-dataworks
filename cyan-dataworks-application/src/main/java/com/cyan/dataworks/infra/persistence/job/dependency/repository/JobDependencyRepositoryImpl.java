@@ -77,8 +77,7 @@ public class JobDependencyRepositoryImpl implements JobDependencyRepository {
      */
     @Override
     public void replaceByDownstreamJobId(String downstreamJobId, List<JobDependency> dependencies) {
-        jobDependencyMapper.delete(new LambdaQueryWrapper<JobDependencyDO>()
-                .eq(JobDependencyDO::getDownstreamJobId, Convert.toLong(downstreamJobId)));
+        jobDependencyMapper.softDeleteByDownstreamJobId(Convert.toLong(downstreamJobId));
         Optional.ofNullable(dependencies).orElse(List.of())
                 .forEach(this::save);
     }
@@ -88,11 +87,7 @@ public class JobDependencyRepositoryImpl implements JobDependencyRepository {
      */
     @Override
     public void deleteByJobId(String jobId) {
-        Long id = Convert.toLong(jobId);
-        jobDependencyMapper.delete(new LambdaQueryWrapper<JobDependencyDO>()
-                .eq(JobDependencyDO::getUpstreamJobId, id)
-                .or()
-                .eq(JobDependencyDO::getDownstreamJobId, id));
+        jobDependencyMapper.softDeleteByJobId(Convert.toLong(jobId));
     }
 
     /**

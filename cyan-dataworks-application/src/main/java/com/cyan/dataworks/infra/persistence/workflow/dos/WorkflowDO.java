@@ -69,6 +69,6 @@ public class WorkflowDO {
 
     /** 删除时间 */
     @TableField("deleted_at")
-    @TableLogic(value = "null", delval = "now()")
+    @TableLogic(value = "null", delval = "now(6)")
     private LocalDateTime deletedAt;
 }

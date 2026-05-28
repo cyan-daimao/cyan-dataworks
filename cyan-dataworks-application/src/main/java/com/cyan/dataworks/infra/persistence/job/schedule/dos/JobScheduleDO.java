@@ -90,6 +90,6 @@ public class JobScheduleDO {
      * 删除时间
      */
     @TableField(value = "deleted_at")
-    @TableLogic(value = "null", delval = "now()")
+    @TableLogic(value = "null", delval = "now(6)")
     private LocalDateTime deletedAt;
 }
