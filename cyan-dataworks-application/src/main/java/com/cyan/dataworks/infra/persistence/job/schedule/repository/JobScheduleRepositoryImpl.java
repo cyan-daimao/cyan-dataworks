@@ -79,4 +79,15 @@ public class JobScheduleRepositoryImpl implements JobScheduleRepository {
         return java.util.Optional.ofNullable(jobScheduleMapper.selectList(wrapper)).orElse(java.util.List.of())
                 .stream().map(JobScheduleInfraConvert.INSTANCE::toJobSchedule).toList();
     }
+
+    /**
+     * 查询Airflow调度配置
+     */
+    @Override
+    public java.util.List<JobSchedule> listAirflow() {
+        LambdaQueryWrapper<JobScheduleDO> wrapper = new LambdaQueryWrapper<JobScheduleDO>()
+                .eq(JobScheduleDO::getSchedulerType, SchedulerType.AIRFLOW);
+        return java.util.Optional.ofNullable(jobScheduleMapper.selectList(wrapper)).orElse(java.util.List.of())
+                .stream().map(JobScheduleInfraConvert.INSTANCE::toJobSchedule).toList();
+    }
 }

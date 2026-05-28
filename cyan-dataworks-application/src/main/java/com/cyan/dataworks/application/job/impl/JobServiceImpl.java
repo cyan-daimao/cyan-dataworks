@@ -23,16 +23,19 @@ import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
 import com.cyan.dataworks.enums.SchedulerType;
+import com.cyan.dataworks.infra.remote.airflow.AirflowDagStateService;
 import com.cyan.dataworks.infra.remote.flink.FlinkRemoteService;
 import com.cyan.dataworks.infra.remote.flink.operator.FlinkApplicationOperatorService;
 import com.cyan.dataworks.infra.schedule.ScheduleJobExecutor;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -56,6 +59,7 @@ public class JobServiceImpl implements JobService {
     private final FlinkRuntimeConfigParser flinkRuntimeConfigParser;
     private final JobLineageSyncService jobLineageSyncService;
     private final JobDependencyService jobDependencyService;
+    private final AirflowDagStateService airflowDagStateService;
     private final ObjectMapper objectMapper;
 
     public JobServiceImpl(JobRepository jobRepository,
@@ -68,6 +72,7 @@ public class JobServiceImpl implements JobService {
                           FlinkRuntimeConfigParser flinkRuntimeConfigParser,
                           JobLineageSyncService jobLineageSyncService,
                           JobDependencyService jobDependencyService,
+                          AirflowDagStateService airflowDagStateService,
                           ObjectMapper objectMapper) {
         this.jobRepository = jobRepository;
         this.jobScheduleRepository = jobScheduleRepository;
@@ -79,6 +84,7 @@ public class JobServiceImpl implements JobService {
         this.flinkRuntimeConfigParser = flinkRuntimeConfigParser;
         this.jobLineageSyncService = jobLineageSyncService;
         this.jobDependencyService = jobDependencyService;
+        this.airflowDagStateService = airflowDagStateService;
         this.objectMapper = objectMapper;
     }
 
@@ -170,10 +176,11 @@ public class JobServiceImpl implements JobService {
         Assert.notNull(existing, new SilentException("作业不存在"));
         log.info("准备发布DataWorks作业: jobId={}, name={}, engineType={}, nodeType={}, status={}, updatedBy={}",
                 existing.getId(), existing.getName(), existing.getEngineType(), existing.getNodeType(), existing.getStatus(), updatedBy);
-        validateShellAirflowSchedule(existing);
+        enableAirflowScheduleIfNeeded(existing);
         existing.setUpdatedBy(updatedBy);
         Job job = existing.publish(jobRepository);
         jobLineageSyncService.sync(job);
+        airflowDagStateService.syncJobDagPaused(job, false, false);
         syncFlinkApplicationIfNeeded(job);
         log.info("DataWorks作业发布完成: jobId={}, name={}, engineType={}, nodeType={}, status={}",
                 job.getId(), job.getName(), job.getEngineType(), job.getNodeType(), job.getStatus());
@@ -181,33 +188,78 @@ public class JobServiceImpl implements JobService {
     }
 
     /**
-     * Shell作业发布到生产前必须具备启用的Airflow调度，否则Airflow不会生成DAG。
+     * 脚本作业发布到生产前必须具备Airflow调度，发布时默认启用并同步启动DAG。
      */
-    private void validateShellAirflowSchedule(Job job) {
-        if (job.getEngineType() != EngineType.SHELL) {
+    private void enableAirflowScheduleIfNeeded(Job job) {
+        if (job.getEngineType() != EngineType.SHELL && job.getEngineType() != EngineType.PYTHON) {
             return;
         }
         JobSchedule schedule = jobScheduleRepository.findByJobId(job.getId());
-        log.info("校验Shell作业Airflow调度配置: jobId={}, scheduleExists={}, enabled={}, schedulerType={}, cronExpression={}",
+        log.info("校验脚本作业Airflow调度配置: jobId={}, scheduleExists={}, enabled={}, schedulerType={}, cronExpression={}",
                 job.getId(),
                 schedule != null,
                 schedule == null ? null : schedule.getEnabled(),
                 schedule == null ? null : schedule.getSchedulerType(),
                 schedule == null ? null : schedule.getCronExpression());
         boolean validAirflowSchedule = schedule != null
-                && Boolean.TRUE.equals(schedule.getEnabled())
                 && schedule.getSchedulerType() == SchedulerType.AIRFLOW
                 && schedule.getCronExpression() != null
                 && !schedule.getCronExpression().isBlank();
         if (!validAirflowSchedule) {
-            log.warn("Shell作业Airflow调度配置无效，拒绝发布: jobId={}, scheduleExists={}, enabled={}, schedulerType={}, cronExpression={}",
+            log.warn("脚本作业Airflow调度配置无效，拒绝发布: jobId={}, scheduleExists={}, enabled={}, schedulerType={}, cronExpression={}",
                     job.getId(),
                     schedule != null,
                     schedule == null ? null : schedule.getEnabled(),
                     schedule == null ? null : schedule.getSchedulerType(),
                     schedule == null ? null : schedule.getCronExpression());
         }
-        Assert.isTrue(validAirflowSchedule, new SilentException("Shell作业发布前请填写Cron并启用Airflow调度"));
+        Assert.isTrue(validAirflowSchedule, new SilentException("脚本作业发布前请填写Cron并配置Airflow调度"));
+        validateAirflowCronExpression(schedule.getCronExpression());
+        if (!Boolean.TRUE.equals(schedule.getEnabled())) {
+            schedule.setEnabled(true);
+            jobScheduleRepository.updateById(schedule);
+        }
+    }
+
+    /**
+     * 校验Airflow Cron表达式
+     */
+    private void validateAirflowCronExpression(String cronExpression) {
+        String normalizedCron = normalizeToAirflowCron(cronExpression);
+        Assert.notBlank(normalizedCron, new SilentException("Cron表达式不合法"));
+        try {
+            CronExpression.parse("0 " + normalizedCron);
+        } catch (IllegalArgumentException e) {
+            throw new SilentException("Cron表达式不合法，请检查格式: " + cronExpression);
+        }
+    }
+
+    /**
+     * 归一化为Airflow 5段Cron表达式
+     */
+    private String normalizeToAirflowCron(String cronExpression) {
+        if (cronExpression == null || cronExpression.isBlank()) {
+            return null;
+        }
+        List<String> rawParts = Arrays.stream(cronExpression.trim().split("\\s+"))
+                .filter(part -> !part.isBlank())
+                .toList();
+        if (rawParts.isEmpty()) {
+            return null;
+        }
+        List<String> parts = rawParts.stream()
+                .map(part -> part.replace("?", "*").replace("？", "*"))
+                .toList();
+        if (parts.size() == 5) {
+            if (rawParts.get(4).endsWith("?") || rawParts.get(4).endsWith("？")) {
+                return String.join(" ", parts.get(1), parts.get(2), parts.get(3), "*", "*");
+            }
+            return String.join(" ", parts);
+        }
+        if (parts.size() == 6 || parts.size() == 7) {
+            return String.join(" ", parts.subList(1, 6));
+        }
+        return null;
     }
 
     /**

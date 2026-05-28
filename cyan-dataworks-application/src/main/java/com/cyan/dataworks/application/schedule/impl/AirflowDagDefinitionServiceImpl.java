@@ -11,9 +11,11 @@ import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
 import com.cyan.dataworks.enums.TaskStatus;
 import com.cyan.dataworks.infra.config.AirflowProperties;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -68,14 +70,14 @@ public class AirflowDagDefinitionServiceImpl implements AirflowDagDefinitionServ
     @Override
     public List<AirflowDagDefinitionBO> listEnabledDefinitions() {
         String prefix = Optional.ofNullable(airflowProperties.getDagPrefix()).filter(value -> !value.isBlank()).orElse("dataworks");
-        List<JobSchedule> schedules = jobScheduleRepository.listEnabled();
+        List<JobSchedule> schedules = jobScheduleRepository.listAirflow();
         List<JobDependency> dependencies = jobDependencyRepository.listAll();
         List<AirflowDagDefinitionBO> definitions = schedules.stream()
                 .map(schedule -> buildDefinition(prefix, schedule, dependencies))
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .toList();
-        log.info("Airflow查询DAG定义: enabledScheduleCount={}, returnedDagCount={}, dagPrefix={}",
+        log.info("Airflow查询DAG定义: airflowScheduleCount={}, returnedDagCount={}, dagPrefix={}",
                 schedules.size(), definitions.size(), prefix);
         return definitions;
     }
@@ -100,6 +102,11 @@ public class AirflowDagDefinitionServiceImpl implements AirflowDagDefinitionServ
         if (job.getStatus() != TaskStatus.ONLINE) {
             log.info("Airflow DAG定义跳过，作业未发布: jobId={}, name={}, status={}, cronExpression={}",
                     job.getId(), job.getName(), job.getStatus(), schedule.getCronExpression());
+            return Optional.empty();
+        }
+        if (!isValidAirflowCronExpression(schedule.getCronExpression())) {
+            log.warn("Airflow DAG定义跳过，Cron表达式不合法: jobId={}, name={}, cronExpression={}",
+                    job.getId(), job.getName(), schedule.getCronExpression());
             return Optional.empty();
         }
         Map<String, List<JobDependency>> dependencyMap = Optional.ofNullable(dependencies).orElse(List.of())
@@ -185,5 +192,49 @@ public class AirflowDagDefinitionServiceImpl implements AirflowDagDefinitionServ
      */
     private String taskId(String jobId) {
         return "job_" + jobId;
+    }
+
+    /**
+     * 校验Airflow Cron表达式
+     */
+    private boolean isValidAirflowCronExpression(String cronExpression) {
+        String normalizedCron = normalizeToAirflowCron(cronExpression);
+        if (normalizedCron == null || normalizedCron.isBlank()) {
+            return false;
+        }
+        try {
+            CronExpression.parse("0 " + normalizedCron);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    /**
+     * 归一化为Airflow 5段Cron表达式
+     */
+    private String normalizeToAirflowCron(String cronExpression) {
+        if (cronExpression == null || cronExpression.isBlank()) {
+            return null;
+        }
+        List<String> rawParts = Arrays.stream(cronExpression.trim().split("\\s+"))
+                .filter(part -> !part.isBlank())
+                .toList();
+        if (rawParts.isEmpty()) {
+            return null;
+        }
+        List<String> parts = rawParts.stream()
+                .map(part -> part.replace("?", "*").replace("？", "*"))
+                .toList();
+        if (parts.size() == 5) {
+            if (rawParts.get(4).endsWith("?") || rawParts.get(4).endsWith("？")) {
+                return String.join(" ", parts.get(1), parts.get(2), parts.get(3), "*", "*");
+            }
+            return String.join(" ", parts);
+        }
+        if (parts.size() == 6 || parts.size() == 7) {
+            return String.join(" ", parts.subList(1, 6));
+        }
+        return null;
     }
 }

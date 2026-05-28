@@ -38,6 +38,10 @@ flink:
     entry-class: com.cyan.dataman.infra.flink.SqlRunner
     parallelism: 1
 airflow:
+  enabled: ${AIRFLOW_ENABLED:true}
+  base-url: ${AIRFLOW_BASE_URL:http://dataworks-airflow-webserver.airflow.svc.cluster.local:8080}
+  username: ${AIRFLOW_USERNAME:admin}
+  password: ${AIRFLOW_PASSWORD:admin}
   remote-log:
     endpoint: http://10.0.0.2:9000
     access-key: rustfsadmin

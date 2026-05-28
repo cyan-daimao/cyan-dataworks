@@ -74,6 +74,9 @@ dags:
 config:
   core:
     load_examples: "False"
+    dags_are_paused_at_creation: "False"
+  api:
+    auth_backends: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
   logging:
     remote_logging: "True"
     remote_base_log_folder: "s3://airflow-logs/dataworks-airflow"

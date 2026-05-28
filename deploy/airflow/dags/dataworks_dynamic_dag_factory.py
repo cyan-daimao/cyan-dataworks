@@ -97,6 +97,7 @@ for dag_def in _load_dag_definitions():
             start_date=datetime(2026, 1, 1, tzinfo=pendulum.timezone("Asia/Shanghai")),
             schedule=schedule,
             catchup=False,
+            is_paused_upon_creation=False,
             tags=["dataworks"],
         ) as dag:
             tasks = {}

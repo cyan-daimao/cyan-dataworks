@@ -36,4 +36,9 @@ public interface JobScheduleRepository {
      * 查询已启用的调度配置
      */
     List<JobSchedule> listEnabled();
+
+    /**
+     * 查询Airflow调度配置
+     */
+    List<JobSchedule> listAirflow();
 }

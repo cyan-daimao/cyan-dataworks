@@ -10,6 +10,9 @@ import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
 import com.cyan.dataworks.domain.job.schedule.JobSchedule;
 import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
+import com.cyan.dataworks.enums.SchedulerType;
+import com.cyan.dataworks.enums.TaskStatus;
+import com.cyan.dataworks.infra.remote.airflow.AirflowDagStateService;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,11 +31,14 @@ public class JobScheduleServiceImpl implements JobScheduleService {
 
     private final JobScheduleRepository jobScheduleRepository;
     private final JobRepository jobRepository;
+    private final AirflowDagStateService airflowDagStateService;
 
     public JobScheduleServiceImpl(JobScheduleRepository jobScheduleRepository,
-                                  JobRepository jobRepository) {
+                                  JobRepository jobRepository,
+                                  AirflowDagStateService airflowDagStateService) {
         this.jobScheduleRepository = jobScheduleRepository;
         this.jobRepository = jobRepository;
+        this.airflowDagStateService = airflowDagStateService;
     }
 
     /**
@@ -68,8 +74,22 @@ public class JobScheduleServiceImpl implements JobScheduleService {
             jobSchedule.setId(existing.getId());
             result = jobSchedule.update(jobScheduleRepository);
         }
+        syncAirflowDagStateIfNeeded(job, result);
 
         return JobScheduleAppConvert.INSTANCE.toJobScheduleBO(result);
+    }
+
+    /**
+     * 同步Airflow DAG暂停状态
+     */
+    private void syncAirflowDagStateIfNeeded(Job job, JobSchedule jobSchedule) {
+        if (job.getStatus() != TaskStatus.ONLINE) {
+            return;
+        }
+        if (jobSchedule.getSchedulerType() != SchedulerType.AIRFLOW) {
+            return;
+        }
+        airflowDagStateService.syncJobDagPaused(job, !Boolean.TRUE.equals(jobSchedule.getEnabled()), true);
     }
 
     /**
