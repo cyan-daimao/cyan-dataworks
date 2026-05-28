@@ -46,6 +46,19 @@ def _make_task_payload(job_id: str, dag_id: str, task_id: str) -> str:
 """ % (dag_id, task_id)
 
 
+def _check_task_response(response) -> bool:
+    try:
+        payload = response.json()
+    except Exception:
+        LOG.exception("DataWorks scheduler response is not valid JSON: status_code=%s", response.status_code)
+        return False
+    data = payload.get("data") or {}
+    success = payload.get("code") == 200 and data.get("status") == "SUCCESS"
+    if not success:
+        LOG.error("DataWorks scheduler task failed: %s", payload)
+    return success
+
+
 def _normalize_cron_expression(cron_expression: str | None) -> str | None:
     if not cron_expression:
         return None
@@ -95,7 +108,8 @@ for dag_def in _load_dag_definitions():
                 endpoint=f"/rpc/dataworks/job-instances/{job_id}/run-by-scheduler",
                 method="POST",
                 data=_make_task_payload(job_id, dag_id, task_id),
-                response_check=lambda response: response.json().get("data", {}).get("status") == "SUCCESS",
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+                response_check=_check_task_response,
                 log_response=True,
             )
         for task_def in dag_def.get("tasks") or []:
