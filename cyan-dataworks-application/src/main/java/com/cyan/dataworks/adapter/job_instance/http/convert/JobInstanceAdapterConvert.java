@@ -5,6 +5,8 @@ import com.cyan.dataworks.adapter.job_instance.http.dto.JobInstanceDTO;
 import com.cyan.dataworks.adapter.job_instance.http.dto.JobInstanceLogDTO;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceLogBO;
+import com.cyan.dataworks.application.job_instance.cmd.JobRunBySchedulerCmd;
+import com.cyan.dataworks.client.job_instance.request.JobRunBySchedulerRequest;
 import org.mapstruct.Mapper;
 import org.mapstruct.factory.Mappers;
 
@@ -23,6 +25,16 @@ public interface JobInstanceAdapterConvert {
      * BO 转 DTO
      */
     JobInstanceDTO toJobInstanceDTO(JobInstanceBO jobInstanceBO);
+
+    /**
+     * BO 转 RPC DTO
+     */
+    com.cyan.dataworks.client.job_instance.dto.JobInstanceDTO toRpcJobInstanceDTO(JobInstanceBO jobInstanceBO);
+
+    /**
+     * RPC调度请求转应用命令
+     */
+    JobRunBySchedulerCmd toJobRunBySchedulerCmd(JobRunBySchedulerRequest request);
 
     /**
      * 日志BO 转 DTO

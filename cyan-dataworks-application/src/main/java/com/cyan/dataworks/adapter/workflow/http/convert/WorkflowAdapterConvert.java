@@ -15,6 +15,8 @@ import com.cyan.dataworks.application.workflow.bo.WorkflowDagDefinitionBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowDefinitionBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowInstanceBO;
 import com.cyan.dataworks.application.workflow.bo.WorkflowScheduleBO;
+import com.cyan.dataworks.application.workflow.cmd.WorkflowRunBySchedulerCmd;
+import com.cyan.dataworks.client.workflow.request.WorkflowRunBySchedulerRequest;
 import org.mapstruct.Mapper;
 import org.mapstruct.factory.Mappers;
 
@@ -37,6 +39,12 @@ public interface WorkflowAdapterConvert {
 
     /** 工作流DAG定义BO转DTO */
     WorkflowDagDefinitionDTO toDagDefinitionDTO(WorkflowDagDefinitionBO bo);
+
+    /** 工作流DAG定义BO转RPC DTO */
+    com.cyan.dataworks.client.workflow.dto.WorkflowDagDefinitionDTO toRpcDagDefinitionDTO(WorkflowDagDefinitionBO bo);
+
+    /** RPC调度请求转应用命令 */
+    WorkflowRunBySchedulerCmd toWorkflowRunBySchedulerCmd(WorkflowRunBySchedulerRequest request);
 
     /** 调度配置BO转DTO */
     WorkflowScheduleDTO toScheduleDTO(WorkflowScheduleBO bo);

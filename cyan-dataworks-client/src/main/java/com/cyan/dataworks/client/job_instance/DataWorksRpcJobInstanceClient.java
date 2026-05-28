@@ -2,10 +2,12 @@ package com.cyan.dataworks.client.job_instance;
 
 import com.cyan.arch.common.api.Response;
 import com.cyan.dataworks.client.job_instance.dto.JobInstanceDTO;
+import com.cyan.dataworks.client.job_instance.request.JobRunBySchedulerRequest;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
@@ -25,6 +27,17 @@ public interface DataWorksRpcJobInstanceClient {
     @PostMapping("/{jobId}/start-application")
     Response<JobInstanceDTO> startApplication(@PathVariable String jobId,
                                                @RequestParam(required = false) String createdBy);
+
+    /**
+     * 调度器触发执行作业
+     *
+     * @param jobId 作业ID
+     * @param request 调度器执行请求
+     * @return 作业实例
+     */
+    @PostMapping("/{jobId}/run-by-scheduler")
+    Response<JobInstanceDTO> runByScheduler(@PathVariable String jobId,
+                                            @RequestBody JobRunBySchedulerRequest request);
 
     /**
      * 根据 ID 查询实例

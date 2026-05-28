@@ -2,10 +2,12 @@ package com.cyan.dataworks.adapter.job_instance.rpc;
 
 import com.cyan.arch.common.api.Response;
 import com.cyan.dataworks.adapter.job_instance.http.convert.JobInstanceAdapterConvert;
-import com.cyan.dataworks.adapter.job_instance.http.dto.JobInstanceDTO;
 import com.cyan.dataworks.application.job_instance.JobInstanceService;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
 import com.cyan.dataworks.application.job_instance.cmd.JobRunBySchedulerCmd;
+import com.cyan.dataworks.client.job_instance.DataWorksRpcJobInstanceClient;
+import com.cyan.dataworks.client.job_instance.dto.JobInstanceDTO;
+import com.cyan.dataworks.client.job_instance.request.JobRunBySchedulerRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/rpc/dataworks/job-instances")
-public class DataWorksJobInstanceRpcController {
+public class DataWorksJobInstanceRpcController implements DataWorksRpcJobInstanceClient {
 
     private final JobInstanceService jobInstanceService;
 
@@ -31,11 +33,12 @@ public class DataWorksJobInstanceRpcController {
      * 启动正式 Application Mode 作业
      */
     @PostMapping("/{jobId}/start-application")
+    @Override
     public Response<JobInstanceDTO> startApplication(@PathVariable String jobId,
                                                       @RequestParam(required = false) String createdBy) {
         String operator = createdBy != null && !createdBy.isBlank() ? createdBy : "system";
         JobInstanceBO bo = jobInstanceService.startApplication(jobId, operator);
-        JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toJobInstanceDTO(bo);
+        JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toRpcJobInstanceDTO(bo);
         return Response.success(dto);
     }
 
@@ -43,14 +46,15 @@ public class DataWorksJobInstanceRpcController {
      * 调度器触发执行作业
      *
      * @param jobId 作业ID
-     * @param cmd 调度器执行命令
      * @return 作业实例
      */
     @PostMapping("/{jobId}/run-by-scheduler")
+    @Override
     public Response<JobInstanceDTO> runByScheduler(@PathVariable String jobId,
-                                                    @RequestBody @Valid JobRunBySchedulerCmd cmd) {
+                                                    @RequestBody @Valid JobRunBySchedulerRequest request) {
+        JobRunBySchedulerCmd cmd = JobInstanceAdapterConvert.INSTANCE.toJobRunBySchedulerCmd(request);
         JobInstanceBO bo = jobInstanceService.runByScheduler(jobId, cmd);
-        JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toJobInstanceDTO(bo);
+        JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toRpcJobInstanceDTO(bo);
         return Response.success(dto);
     }
 
@@ -58,9 +62,10 @@ public class DataWorksJobInstanceRpcController {
      * 根据 ID 查询实例
      */
     @GetMapping("/{instanceId}")
+    @Override
     public Response<JobInstanceDTO> findById(@PathVariable String instanceId) {
         JobInstanceBO bo = jobInstanceService.findById(instanceId);
-        JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toJobInstanceDTO(bo);
+        JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toRpcJobInstanceDTO(bo);
         return Response.success(dto);
     }
 }

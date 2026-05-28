@@ -9,7 +9,6 @@ import com.cyan.dataworks.application.job_instance.JobInstanceService;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceLogBO;
 import com.cyan.dataworks.application.job_instance.cmd.JobPreviewExecuteCmd;
-import com.cyan.dataworks.application.job_instance.cmd.JobRunBySchedulerCmd;
 import com.cyan.dataworks.domain.job_instance.query.JobInstanceLogQuery;
 import com.cyan.dataworks.domain.job_instance.query.JobInstancePageQuery;
 import com.cyan.dataworks.enums.ExecutionStatus;
@@ -66,17 +65,6 @@ public class JobInstanceController {
     @PostMapping("/jobs/{jobId}/start")
     public Response<JobInstanceDTO> startApplication(@PathVariable String jobId) {
         JobInstanceBO bo = jobInstanceService.startApplication(jobId, UserContextHolder.getCurrentEmployee().getPassport());
-        JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toJobInstanceDTO(bo);
-        return Response.success(dto);
-    }
-
-    /**
-     * 调度器触发执行作业
-     */
-    @PostMapping("/jobs/{jobId}/run-by-scheduler")
-    public Response<JobInstanceDTO> runByScheduler(@PathVariable String jobId,
-                                                   @RequestBody @Valid JobRunBySchedulerCmd cmd) {
-        JobInstanceBO bo = jobInstanceService.runByScheduler(jobId, cmd);
         JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toJobInstanceDTO(bo);
         return Response.success(dto);
     }
