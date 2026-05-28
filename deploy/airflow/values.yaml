@@ -32,9 +32,15 @@ extraEnv: |
       secretKeyRef:
         name: dataworks-airflow-token
         key: token
+  - name: AIRFLOW_CONN_AIRFLOW_LOGS_S3
+    valueFrom:
+      secretKeyRef:
+        name: airflow-rustfs-logs
+        key: connection
 
 extraPipPackages:
   - apache-airflow-providers-http
+  - apache-airflow-providers-amazon
   - requests
 
 volumes:
@@ -68,3 +74,8 @@ dags:
 config:
   core:
     load_examples: "False"
+  logging:
+    remote_logging: "True"
+    remote_base_log_folder: "s3://airflow-logs/dataworks-airflow"
+    remote_log_conn_id: "airflow_logs_s3"
+    encrypt_s3_logs: "False"

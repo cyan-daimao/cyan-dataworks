@@ -11,16 +11,8 @@ from airflow.providers.http.operators.http import HttpOperator
 
 
 DATAWORKS_BASE_URL = os.getenv("DATAWORKS_BASE_URL", "http://cyan-dataworks.pre.svc.cluster.local:8080")
-DATAWORKS_TOKEN = os.getenv("DATAWORKS_TOKEN", "")
 DAG_DEFINITION_ENDPOINT = os.getenv("DATAWORKS_DAG_DEFINITION_ENDPOINT", "/rpc/dataworks/airflow/dag-definitions")
 LOG = logging.getLogger(__name__)
-
-
-def _headers() -> dict[str, str]:
-    headers = {"Content-Type": "application/json"}
-    if DATAWORKS_TOKEN:
-        headers["Authorization"] = f"Bearer {DATAWORKS_TOKEN}"
-    return headers
 
 
 def _load_dag_definitions() -> list[dict]:
@@ -29,7 +21,6 @@ def _load_dag_definitions() -> list[dict]:
     try:
         response = requests.get(
             url,
-            headers=_headers(),
             timeout=10,
         )
         response.raise_for_status()
@@ -101,10 +92,9 @@ for dag_def in _load_dag_definitions():
             tasks[task_id] = HttpOperator(
                 task_id=task_id,
                 http_conn_id="dataworks_http",
-                endpoint=f"/api/v1/data-work/jobs/{job_id}/run-by-scheduler",
+                endpoint=f"/rpc/dataworks/job-instances/{job_id}/run-by-scheduler",
                 method="POST",
                 data=_make_task_payload(job_id, dag_id, task_id),
-                headers=_headers(),
                 response_check=lambda response: response.json().get("data", {}).get("status") == "SUCCESS",
                 log_response=True,
             )

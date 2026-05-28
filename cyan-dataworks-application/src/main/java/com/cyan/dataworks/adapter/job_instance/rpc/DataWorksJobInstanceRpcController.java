@@ -5,6 +5,8 @@ import com.cyan.dataworks.adapter.job_instance.http.convert.JobInstanceAdapterCo
 import com.cyan.dataworks.adapter.job_instance.http.dto.JobInstanceDTO;
 import com.cyan.dataworks.application.job_instance.JobInstanceService;
 import com.cyan.dataworks.application.job_instance.bo.JobInstanceBO;
+import com.cyan.dataworks.application.job_instance.cmd.JobRunBySchedulerCmd;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -33,6 +35,21 @@ public class DataWorksJobInstanceRpcController {
                                                       @RequestParam(required = false) String createdBy) {
         String operator = createdBy != null && !createdBy.isBlank() ? createdBy : "system";
         JobInstanceBO bo = jobInstanceService.startApplication(jobId, operator);
+        JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toJobInstanceDTO(bo);
+        return Response.success(dto);
+    }
+
+    /**
+     * 调度器触发执行作业
+     *
+     * @param jobId 作业ID
+     * @param cmd 调度器执行命令
+     * @return 作业实例
+     */
+    @PostMapping("/{jobId}/run-by-scheduler")
+    public Response<JobInstanceDTO> runByScheduler(@PathVariable String jobId,
+                                                    @RequestBody @Valid JobRunBySchedulerCmd cmd) {
+        JobInstanceBO bo = jobInstanceService.runByScheduler(jobId, cmd);
         JobInstanceDTO dto = JobInstanceAdapterConvert.INSTANCE.toJobInstanceDTO(bo);
         return Response.success(dto);
     }
