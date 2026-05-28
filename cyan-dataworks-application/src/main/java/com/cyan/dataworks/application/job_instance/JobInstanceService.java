@@ -57,7 +57,7 @@ public interface JobInstanceService {
     JobInstanceBO findById(String id);
 
     /**
-     * 查询实例K8s Pod日志
+     * 查询实例日志
      */
     JobInstanceLogBO getLogs(String id, JobInstanceLogQuery query);
 }

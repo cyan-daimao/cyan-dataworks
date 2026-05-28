@@ -26,12 +26,12 @@ public class JobInstanceLogDTO {
     private String instanceId;
 
     /**
-     * FlinkDeployment名称
+     * 日志来源名称
      */
     private String deploymentName;
 
     /**
-     * K8s命名空间
+     * 日志来源命名空间
      */
     private String namespace;
 

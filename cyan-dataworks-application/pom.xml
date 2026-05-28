@@ -82,6 +82,11 @@
             <artifactId>fastjson2</artifactId>
             <version>2.0.52</version>
         </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.25.27</version>
+        </dependency>
     </dependencies>
 
     <build>

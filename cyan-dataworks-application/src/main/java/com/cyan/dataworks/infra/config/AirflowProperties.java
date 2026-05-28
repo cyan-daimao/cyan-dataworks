@@ -44,4 +44,41 @@ public class AirflowProperties {
      * 访问令牌
      */
     private String token = "";
+
+    /**
+     * 远程日志配置
+     */
+    private RemoteLog remoteLog = new RemoteLog();
+
+    /**
+     * Airflow远程日志配置
+     */
+    @Data
+    public static class RemoteLog {
+
+        /**
+         * RustFS/S3访问地址
+         */
+        private String endpoint = "http://10.0.0.2:9000";
+
+        /**
+         * RustFS/S3 Access Key
+         */
+        private String accessKey = "rustfsadmin";
+
+        /**
+         * RustFS/S3 Secret Key
+         */
+        private String secretKey = "rustfsadmin";
+
+        /**
+         * 日志Bucket
+         */
+        private String bucket = "airflow-logs";
+
+        /**
+         * Airflow远程日志前缀
+         */
+        private String basePrefix = "dataworks-airflow";
+    }
 }

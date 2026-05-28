@@ -37,3 +37,10 @@ flink:
     jar-uri: local:///opt/flink/lib/sql-runner.jar
     entry-class: com.cyan.dataman.infra.flink.SqlRunner
     parallelism: 1
+airflow:
+  remote-log:
+    endpoint: http://10.0.0.2:9000
+    access-key: rustfsadmin
+    secret-key: rustfsadmin
+    bucket: airflow-logs
+    base-prefix: dataworks-airflow

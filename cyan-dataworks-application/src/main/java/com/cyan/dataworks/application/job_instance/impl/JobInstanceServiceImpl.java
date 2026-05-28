@@ -24,6 +24,7 @@ import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
 import com.cyan.dataworks.enums.JobLogRole;
+import com.cyan.dataworks.infra.remote.airflow.AirflowRemoteLogService;
 import com.cyan.dataworks.infra.remote.flink.FlinkRemoteService;
 import com.cyan.dataworks.infra.remote.flink.operator.bo.FlinkPodLogBO;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -50,6 +51,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
     private final JobExecutionPlanner jobExecutionPlanner;
     private final FlinkRuntimeConfigParser flinkRuntimeConfigParser;
     private final JobExecutorRegistry jobExecutorRegistry;
+    private final AirflowRemoteLogService airflowRemoteLogService;
     private final ObjectMapper objectMapper;
 
     public JobInstanceServiceImpl(JobRepository jobRepository,
@@ -58,6 +60,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
                                   JobExecutionPlanner jobExecutionPlanner,
                                   FlinkRuntimeConfigParser flinkRuntimeConfigParser,
                                   JobExecutorRegistry jobExecutorRegistry,
+                                  AirflowRemoteLogService airflowRemoteLogService,
                                   ObjectMapper objectMapper) {
         this.jobRepository = jobRepository;
         this.jobInstanceRepository = jobInstanceRepository;
@@ -65,6 +68,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
         this.jobExecutionPlanner = jobExecutionPlanner;
         this.flinkRuntimeConfigParser = flinkRuntimeConfigParser;
         this.jobExecutorRegistry = jobExecutorRegistry;
+        this.airflowRemoteLogService = airflowRemoteLogService;
         this.objectMapper = objectMapper;
     }
 
@@ -272,12 +276,35 @@ public class JobInstanceServiceImpl implements JobInstanceService {
     }
 
     /**
-     * 查询实例K8s Pod日志
+     * 查询实例日志
      */
     @Override
     public JobInstanceLogBO getLogs(String id, JobInstanceLogQuery query) {
         JobInstance instance = jobInstanceRepository.findById(id);
         Assert.notNull(instance, new SilentException("实例不存在"));
+        if (airflowRemoteLogService.supports(instance)) {
+            String logs = airflowRemoteLogService.readTaskLog(instance);
+            return new JobInstanceLogBO()
+                    .setInstanceId(instance.getId())
+                    .setDeploymentName(airflowRemoteLogService.buildObjectKey(instance))
+                    .setNamespace("rustfs")
+                    .setRole(JobLogRole.ALL)
+                    .setTailLines(null)
+                    .setPods(List.of())
+                    .setLogs(logs)
+                    .setMessage("Airflow远程日志读取成功");
+        }
+        if (instance.getEngineType() == EngineType.SHELL || instance.getEngineType() == EngineType.PYTHON) {
+            return new JobInstanceLogBO()
+                    .setInstanceId(instance.getId())
+                    .setDeploymentName("")
+                    .setNamespace("rustfs")
+                    .setRole(JobLogRole.ALL)
+                    .setTailLines(null)
+                    .setPods(List.of())
+                    .setLogs("")
+                    .setMessage("实例未关联Airflow远程日志");
+        }
         Assert.isTrue(instance.getEngineType() == EngineType.FLINK, new SilentException("只有Flink实例支持查看K8s Pod日志"));
 
         JsonNode resultData = parseResultData(instance.getResultData());

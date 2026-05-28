@@ -134,7 +134,7 @@ public class JobInstanceController {
     }
 
     /**
-     * 查询实例K8s Pod日志
+     * 查询实例日志
      */
     @GetMapping("/instances/{id}/logs")
     public Response<JobInstanceLogDTO> getLogs(@PathVariable String id,
