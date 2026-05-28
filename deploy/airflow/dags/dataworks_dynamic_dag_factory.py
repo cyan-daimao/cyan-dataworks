@@ -65,9 +65,9 @@ def _normalize_cron_expression(cron_expression: str | None) -> str | None:
     raw_parts = cron_expression.strip().split()
     if not raw_parts:
         return None
-    parts = [part.replace("?", "*") for part in raw_parts]
+    parts = [part.replace("?", "*").replace("？", "*") for part in raw_parts]
     if len(parts) == 5:
-        if raw_parts[-1].endswith("?"):
+        if raw_parts[-1].endswith("?") or raw_parts[-1].endswith("？"):
             normalized = [parts[1], parts[2], parts[3], "*", "*"]
         else:
             normalized = parts
