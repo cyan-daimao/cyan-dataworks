@@ -10,6 +10,9 @@ import com.cyan.dataworks.application.job.dependency.bo.JobLineageBO;
 import com.cyan.dataworks.application.job.dependency.cmd.JobDependencyCmd;
 import com.cyan.dataworks.application.job.dependency.convert.JobDependencyAppConvert;
 import com.cyan.dataworks.application.job.lineage.JobLineageSyncService;
+import com.cyan.dataworks.application.workflow.WorkflowService;
+import com.cyan.dataworks.application.workflow.bo.WorkflowBO;
+import com.cyan.dataworks.application.workflow.cmd.WorkflowDependencyCmd;
 import com.cyan.dataworks.domain.job.Job;
 import com.cyan.dataworks.domain.job.dependency.JobDependency;
 import com.cyan.dataworks.domain.job.dependency.repository.JobDependencyRepository;
@@ -53,12 +56,19 @@ public class JobDependencyServiceImpl implements JobDependencyService {
      */
     private final JobLineageSyncService jobLineageSyncService;
 
+    /**
+     * 工作流应用服务
+     */
+    private final WorkflowService workflowService;
+
     public JobDependencyServiceImpl(JobRepository jobRepository,
                                     JobDependencyRepository jobDependencyRepository,
-                                    JobLineageSyncService jobLineageSyncService) {
+                                    JobLineageSyncService jobLineageSyncService,
+                                    WorkflowService workflowService) {
         this.jobRepository = jobRepository;
         this.jobDependencyRepository = jobDependencyRepository;
         this.jobLineageSyncService = jobLineageSyncService;
+        this.workflowService = workflowService;
     }
 
     /**
@@ -112,6 +122,7 @@ public class JobDependencyServiceImpl implements JobDependencyService {
                 .filter(job -> job != null)
                 .toList();
         jobLineageSyncService.syncDependencies(downstreamJob, upstreamJobs);
+        syncSingleNodeWorkflowDependencies(jobId, upstreamJobIds, updatedBy);
         return findByJobId(jobId);
     }
 
@@ -168,7 +179,23 @@ public class JobDependencyServiceImpl implements JobDependencyService {
                     .filter(upstreamJob -> upstreamJob != null)
                     .toList();
             jobLineageSyncService.syncDependencies(downstreamJob, upstreamJobs);
+            syncSingleNodeWorkflowDependencies(downstreamJobId,
+                    upstreamJobs.stream().map(Job::getId).toList(),
+                    downstreamJob.getUpdatedBy());
         });
+    }
+
+    /**
+     * 同步单节点任务依赖到工作流级依赖，供Airflow DAG生成跨DAG依赖
+     */
+    private void syncSingleNodeWorkflowDependencies(String downstreamJobId, List<String> upstreamJobIds, String updatedBy) {
+        WorkflowBO downstreamWorkflow = workflowService.ensureSingleNodeWorkflow(downstreamJobId, updatedBy);
+        List<String> upstreamWorkflowIds = Optional.ofNullable(upstreamJobIds).orElse(List.of()).stream()
+                .map(upstreamJobId -> workflowService.ensureSingleNodeWorkflow(upstreamJobId, updatedBy))
+                .map(WorkflowBO::getId)
+                .toList();
+        workflowService.saveDependencies(downstreamWorkflow.getId(), new WorkflowDependencyCmd()
+                .setUpstreamWorkflowIds(upstreamWorkflowIds), updatedBy);
     }
 
     /**

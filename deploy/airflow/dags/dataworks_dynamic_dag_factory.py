@@ -11,6 +11,7 @@ from airflow.exceptions import AirflowException
 from airflow.providers.http.operators.http import HttpOperator
 from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.sensors.python import PythonSensor
+from airflow.utils.state import DagRunState
 from airflow.utils.task_group import TaskGroup
 
 
@@ -147,9 +148,8 @@ for dag_def in _load_dag_definitions():
                         task_id=f"wait_external_{index + 1}",
                         external_dag_id=upstream_dag_id,
                         external_task_id=None,
-                        allowed_states=["success"],
-                        failed_states=["failed"],
-                        skipped_states=["skipped"],
+                        allowed_states=[DagRunState.SUCCESS],
+                        failed_states=[DagRunState.FAILED],
                         mode="reschedule",
                         poke_interval=30,
                         timeout=60 * 60 * 24,
