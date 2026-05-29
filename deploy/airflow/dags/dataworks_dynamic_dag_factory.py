@@ -73,6 +73,16 @@ def _extract_instance_id(response) -> str:
     return instance_id
 
 
+def _external_wait_task_id(dependency: dict, index: int) -> str:
+    upstream_workflow_id = str(dependency.get("upstreamWorkflowId") or "").strip()
+    if upstream_workflow_id:
+        return f"wait_for_workflow_{upstream_workflow_id}"
+    upstream_dag_id = str(dependency.get("upstreamDagId") or "").strip()
+    if upstream_dag_id:
+        return f"wait_for_{upstream_dag_id}".replace("-", "_").replace(".", "_")
+    return f"wait_for_external_workflow_{index + 1}"
+
+
 def _wait_instance_success(submit_task_id: str, **context) -> bool:
     instance_id = context["ti"].xcom_pull(task_ids=submit_task_id)
     if not instance_id:
@@ -145,7 +155,7 @@ for dag_def in _load_dag_definitions():
                     continue
                 external_wait_tasks.append(
                     ExternalTaskSensor(
-                        task_id=f"wait_external_{index + 1}",
+                        task_id=_external_wait_task_id(dependency, index),
                         external_dag_id=upstream_dag_id,
                         external_task_id=None,
                         allowed_states=[DagRunState.SUCCESS],
