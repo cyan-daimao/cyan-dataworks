@@ -191,7 +191,8 @@ public class JobInstance {
      */
     public JobInstance save(JobInstanceRepository repository) {
         Assert.isBlank(this.id, new SilentException("新增时id必须为空"));
-        Assert.notBlank(this.jobId, new SilentException("作业ID不能为空"));
+        Assert.isTrue((this.jobId != null && !this.jobId.isBlank()) || (this.workflowNodeId != null && !this.workflowNodeId.isBlank()),
+                new SilentException("作业ID和工作流节点ID不能同时为空"));
         Assert.notNull(this.engineType, new SilentException("引擎类型不能为空"));
         Assert.notBlank(this.content, new SilentException("任务内容不能为空"));
         Assert.notNull(this.status, new SilentException("执行状态不能为空"));

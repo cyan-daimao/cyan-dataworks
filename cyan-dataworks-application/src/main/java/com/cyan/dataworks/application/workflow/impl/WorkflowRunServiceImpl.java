@@ -16,7 +16,6 @@ import com.cyan.dataworks.application.workflow.bo.WorkflowInstanceBO;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowRunBySchedulerCmd;
 import com.cyan.dataworks.application.workflow.convert.WorkflowAppConvert;
 import com.cyan.dataworks.domain.job.Job;
-import com.cyan.dataworks.domain.job.repository.JobRepository;
 import com.cyan.dataworks.domain.job_instance.JobInstance;
 import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
 import com.cyan.dataworks.domain.workflow.Workflow;
@@ -56,9 +55,6 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
     /** 工作流实例仓储 */
     private final WorkflowInstanceRepository workflowInstanceRepository;
 
-    /** 作业仓储 */
-    private final JobRepository jobRepository;
-
     /** 作业实例仓储 */
     private final JobInstanceRepository jobInstanceRepository;
 
@@ -74,7 +70,6 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
     public WorkflowRunServiceImpl(WorkflowRepository workflowRepository,
                                   WorkflowNodeRepository workflowNodeRepository,
                                   WorkflowInstanceRepository workflowInstanceRepository,
-                                  JobRepository jobRepository,
                                   JobInstanceRepository jobInstanceRepository,
                                   JobExecutionPlanner jobExecutionPlanner,
                                   JobExecutorRegistry jobExecutorRegistry,
@@ -82,7 +77,6 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         this.workflowRepository = workflowRepository;
         this.workflowNodeRepository = workflowNodeRepository;
         this.workflowInstanceRepository = workflowInstanceRepository;
-        this.jobRepository = jobRepository;
         this.jobInstanceRepository = jobInstanceRepository;
         this.jobExecutionPlanner = jobExecutionPlanner;
         this.jobExecutorRegistry = jobExecutorRegistry;
@@ -181,25 +175,29 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         if (existing != null) {
             return JobInstanceAppConvert.INSTANCE.toJobInstanceBO(existing);
         }
-        Job job = jobRepository.findById(node.getJobId());
-        Assert.notNull(job, new SilentException("节点关联作业不存在"));
-        Assert.isTrue(job.getStatus() == TaskStatus.ONLINE, new SilentException("节点关联作业未发布"));
-        return executeJob(workflowInstance, node, job, cmd);
+        node.validateDefinition();
+        return executeJob(workflowInstance, node, cmd);
     }
 
     private JobInstanceBO executeJob(WorkflowInstance workflowInstance,
                                      WorkflowNode node,
-                                     Job job,
                                      WorkflowRunBySchedulerCmd schedulerCmd) {
-        String snapshotContent = job.getNodeType() != null && job.getNodeType().isSqlNode()
-                ? jobExecutionPlanner.buildExecutableSql(job)
-                : job.getContent();
+        Job executeJob = new Job()
+                .setId(node.getId())
+                .setName(node.getNodeName())
+                .setEngineType(node.getEngineType())
+                .setNodeType(node.getNodeType())
+                .setContent(node.getContent())
+                .setConfigJson(node.getConfigJson())
+                .setStatus(TaskStatus.ONLINE);
+        String snapshotContent = node.getNodeType() != null && node.getNodeType().isSqlNode()
+                ? jobExecutionPlanner.buildExecutableSql(executeJob)
+                : node.getContent();
         JobInstanceCmd cmd = new JobInstanceCmd()
                 .setWorkflowInstanceId(workflowInstance.getId())
                 .setWorkflowNodeId(node.getId())
-                .setJobId(job.getId())
-                .setJobName(job.getName())
-                .setEngineType(job.getEngineType())
+                .setJobName(node.getNodeName())
+                .setEngineType(node.getEngineType())
                 .setContent(snapshotContent)
                 .setStatus(ExecutionStatus.RUNNING)
                 .setSchedulerType(schedulerCmd.getSchedulerType())
@@ -213,16 +211,8 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         instance = instance.save(jobInstanceRepository);
         long startTime = System.currentTimeMillis();
         try {
-            Job executeJob = new Job()
-                    .setId(job.getId())
-                    .setName(job.getName())
-                    .setDescription(job.getDescription())
-                    .setEngineType(job.getEngineType())
-                    .setNodeType(job.getNodeType())
-                    .setContent(snapshotContent)
-                    .setConfigJson(job.getConfigJson())
-                    .setStatus(job.getStatus());
-            JobExecutionResult result = jobExecutorRegistry.get(job.getNodeType()).execute(executeJob, instance);
+            executeJob.setContent(snapshotContent);
+            JobExecutionResult result = jobExecutorRegistry.get(node.getNodeType()).execute(executeJob, instance);
             if (Boolean.TRUE.equals(result.getAsyncSubmitted())) {
                 instance.bindRuntimeJob(result.getRuntimeJobName(), jobInstanceRepository);
             } else {

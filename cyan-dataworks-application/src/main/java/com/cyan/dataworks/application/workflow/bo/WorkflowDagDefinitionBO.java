@@ -33,6 +33,9 @@ public class WorkflowDagDefinitionBO {
     /** Cron表达式 */
     private String cronExpression;
 
+    /** 调度是否启用 */
+    private Boolean scheduleEnabled;
+
     /** 任务列表 */
     private List<TaskBO> tasks;
 
@@ -54,11 +57,8 @@ public class WorkflowDagDefinitionBO {
         /** 节点ID */
         private String nodeId;
 
-        /** 作业ID */
-        private String jobId;
-
-        /** 作业名称 */
-        private String jobName;
+        /** 节点名称 */
+        private String nodeName;
 
         /** 引擎类型 */
         private EngineType engineType;

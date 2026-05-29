@@ -1,6 +1,7 @@
 package com.cyan.dataworks.application.job;
 
 import com.cyan.arch.common.api.Page;
+import com.cyan.dataworks.application.job.bo.JobDagDefinitionBO;
 import com.cyan.dataworks.application.job.bo.JobBO;
 import com.cyan.dataworks.application.job.cmd.JobCmd;
 import com.cyan.dataworks.domain.job.query.JobPageQuery;
@@ -54,4 +55,9 @@ public interface JobService {
      * 下线作业
      */
     JobBO offline(String id, String updatedBy);
+
+    /**
+     * 查询Airflow单节点作业DAG定义
+     */
+    List<JobDagDefinitionBO> listAirflowDagDefinitions();
 }

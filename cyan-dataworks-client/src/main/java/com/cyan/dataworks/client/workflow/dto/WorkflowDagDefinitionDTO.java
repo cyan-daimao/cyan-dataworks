@@ -42,6 +42,11 @@ public class WorkflowDagDefinitionDTO {
     private String cronExpression;
 
     /**
+     * 调度是否启用
+     */
+    private Boolean scheduleEnabled;
+
+    /**
      * 任务列表
      */
     private List<TaskDTO> tasks;
@@ -71,14 +76,9 @@ public class WorkflowDagDefinitionDTO {
         private String nodeId;
 
         /**
-         * 作业ID
+         * 节点名称
          */
-        private String jobId;
-
-        /**
-         * 作业名称
-         */
-        private String jobName;
+        private String nodeName;
 
         /**
          * 引擎类型

@@ -1,7 +1,6 @@
 package com.cyan.dataworks.adapter.workflow.http.dto;
 
 import com.cyan.dataworks.enums.TaskStatus;
-import com.cyan.dataworks.enums.WorkflowType;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -30,9 +29,6 @@ public class WorkflowDTO {
 
     /** 工作流描述 */
     private String description;
-
-    /** 工作流类型 */
-    private WorkflowType workflowType;
 
     /** DAG ID */
     private String dagId;

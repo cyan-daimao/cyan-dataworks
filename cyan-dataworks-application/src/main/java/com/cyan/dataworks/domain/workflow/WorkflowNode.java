@@ -2,6 +2,8 @@ package com.cyan.dataworks.domain.workflow;
 
 import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.SilentException;
+import com.cyan.dataworks.enums.EngineType;
+import com.cyan.dataworks.enums.NodeType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -32,11 +34,6 @@ public class WorkflowNode {
     private String workflowId;
 
     /**
-     * 作业ID
-     */
-    private String jobId;
-
-    /**
      * 节点编码
      */
     private String nodeCode;
@@ -45,6 +42,21 @@ public class WorkflowNode {
      * 节点名称
      */
     private String nodeName;
+
+    /**
+     * 引擎类型
+     */
+    private EngineType engineType;
+
+    /**
+     * 节点类型
+     */
+    private NodeType nodeType;
+
+    /**
+     * 节点内容
+     */
+    private String content;
 
     /**
      * X坐标
@@ -91,8 +103,10 @@ public class WorkflowNode {
      */
     public void validateDefinition() {
         Assert.notBlank(this.workflowId, new SilentException("工作流ID不能为空"));
-        Assert.notBlank(this.jobId, new SilentException("作业ID不能为空"));
         Assert.notBlank(this.nodeCode, new SilentException("节点编码不能为空"));
         Assert.notBlank(this.nodeName, new SilentException("节点名称不能为空"));
+        Assert.notNull(this.engineType, new SilentException("节点引擎类型不能为空"));
+        Assert.notNull(this.nodeType, new SilentException("节点类型不能为空"));
+        Assert.notBlank(this.content, new SilentException("节点内容不能为空"));
     }
 }

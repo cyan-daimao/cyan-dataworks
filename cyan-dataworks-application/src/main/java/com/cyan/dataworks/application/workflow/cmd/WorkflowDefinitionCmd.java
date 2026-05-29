@@ -1,6 +1,8 @@
 package com.cyan.dataworks.application.workflow.cmd;
 
 import com.cyan.dataworks.enums.JobDependencyType;
+import com.cyan.dataworks.enums.EngineType;
+import com.cyan.dataworks.enums.NodeType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -38,14 +40,20 @@ public class WorkflowDefinitionCmd {
         /** 主键 */
         private String id;
 
-        /** 作业ID */
-        private String jobId;
-
         /** 节点编码 */
         private String nodeCode;
 
         /** 节点名称 */
         private String nodeName;
+
+        /** 引擎类型 */
+        private EngineType engineType;
+
+        /** 节点类型 */
+        private NodeType nodeType;
+
+        /** 节点内容 */
+        private String content;
 
         /** X坐标 */
         private Integer positionX;

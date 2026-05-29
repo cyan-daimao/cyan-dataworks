@@ -15,7 +15,6 @@ import com.cyan.dataworks.application.workflow.cmd.WorkflowDependencyCmd;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowScheduleCmd;
 import com.cyan.dataworks.domain.workflow.query.WorkflowPageQuery;
 import com.cyan.dataworks.enums.TaskStatus;
-import com.cyan.dataworks.enums.WorkflowType;
 import com.cyan.employee.login.filter.UserContextHolder;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -43,13 +42,11 @@ public class WorkflowController {
     /** 分页查询工作流 */
     @GetMapping
     public Response<Page<WorkflowDTO>> page(@RequestParam(required = false) String name,
-                                            @RequestParam(required = false) WorkflowType workflowType,
                                             @RequestParam(required = false) TaskStatus status,
                                             @RequestParam(required = false) Long current,
                                             @RequestParam(required = false) Long size) {
         WorkflowPageQuery query = new WorkflowPageQuery()
                 .setName(name)
-                .setWorkflowType(workflowType)
                 .setStatus(status)
                 .setCreatedBy(UserContextHolder.getCurrentEmployee().getPassport());
         query.setCurrent(current == null ? 1L : current).setSize(size == null ? 10L : size);

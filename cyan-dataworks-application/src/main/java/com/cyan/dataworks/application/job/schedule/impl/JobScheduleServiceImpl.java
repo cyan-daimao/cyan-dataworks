@@ -5,15 +5,19 @@ import com.cyan.arch.common.api.SilentException;
 import com.cyan.dataworks.application.job.schedule.JobScheduleService;
 import com.cyan.dataworks.application.job.schedule.bo.JobScheduleBO;
 import com.cyan.dataworks.application.job.schedule.cmd.JobScheduleCmd;
-import com.cyan.dataworks.application.workflow.WorkflowService;
-import com.cyan.dataworks.application.workflow.bo.WorkflowBO;
-import com.cyan.dataworks.application.workflow.bo.WorkflowScheduleBO;
-import com.cyan.dataworks.application.workflow.cmd.WorkflowScheduleCmd;
+import com.cyan.dataworks.application.job.schedule.convert.JobScheduleAppConvert;
 import com.cyan.dataworks.domain.job.Job;
+import com.cyan.dataworks.domain.job.schedule.JobSchedule;
+import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
+import com.cyan.dataworks.infra.remote.airflow.AirflowOrchestrationGateway;
 import com.cyan.dataworks.enums.TaskStatus;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * 作业调度配置应用服务实现
@@ -27,13 +31,18 @@ public class JobScheduleServiceImpl implements JobScheduleService {
     /** 作业仓储 */
     private final JobRepository jobRepository;
 
-    /** 工作流应用服务 */
-    private final WorkflowService workflowService;
+    /** 作业调度仓储 */
+    private final JobScheduleRepository jobScheduleRepository;
+
+    /** Airflow编排网关 */
+    private final AirflowOrchestrationGateway airflowGateway;
 
     public JobScheduleServiceImpl(JobRepository jobRepository,
-                                  WorkflowService workflowService) {
+                                  JobScheduleRepository jobScheduleRepository,
+                                  AirflowOrchestrationGateway airflowGateway) {
         this.jobRepository = jobRepository;
-        this.workflowService = workflowService;
+        this.jobScheduleRepository = jobScheduleRepository;
+        this.airflowGateway = airflowGateway;
     }
 
     /**
@@ -43,12 +52,11 @@ public class JobScheduleServiceImpl implements JobScheduleService {
     public JobScheduleBO findByJobId(String jobId) {
         Job job = jobRepository.findById(jobId);
         Assert.notNull(job, new SilentException("作业不存在"));
-        WorkflowBO workflow = workflowService.ensureSingleNodeWorkflow(jobId, "system");
-        WorkflowScheduleBO schedule = workflowService.findSchedule(workflow.getId());
+        JobSchedule schedule = jobScheduleRepository.findByJobId(jobId);
         if (schedule == null) {
             return null;
         }
-        return toJobScheduleBO(jobId, schedule);
+        return JobScheduleAppConvert.INSTANCE.toJobScheduleBO(schedule);
     }
 
     /**
@@ -59,24 +67,71 @@ public class JobScheduleServiceImpl implements JobScheduleService {
     public JobScheduleBO saveOrUpdate(String jobId, JobScheduleCmd cmd, String operator) {
         Job job = jobRepository.findById(jobId);
         Assert.notNull(job, new SilentException("作业不存在"));
-        WorkflowBO workflow = workflowService.ensureSingleNodeWorkflow(jobId, operator);
-        WorkflowScheduleBO schedule = workflowService.saveSchedule(workflow.getId(), new WorkflowScheduleCmd()
-                .setCronExpression(cmd.getCronExpression())
-                .setEnabled(cmd.getEnabled())
-                .setSchedulerType(cmd.getSchedulerType()), operator);
-        if (job.getStatus() == TaskStatus.ONLINE) {
-            workflowService.publish(workflow.getId(), operator);
+        JobSchedule schedule = JobScheduleAppConvert.INSTANCE.toJobSchedule(cmd)
+                .setJobId(jobId)
+                .setUpdatedBy(operator);
+        validateCronExpressionIfEnabled(schedule);
+        JobSchedule existing = jobScheduleRepository.findByJobId(jobId);
+        if (existing == null) {
+            schedule.setCreatedBy(operator);
+            schedule = schedule.save(jobScheduleRepository);
+        } else {
+            schedule.setId(existing.getId())
+                    .setCreatedBy(existing.getCreatedBy())
+                    .setCreatedAt(existing.getCreatedAt());
+            schedule = schedule.update(jobScheduleRepository);
         }
-        return toJobScheduleBO(jobId, schedule);
+        if (job.getStatus() == TaskStatus.ONLINE) {
+            airflowGateway.syncDagPaused(airflowGateway.buildJobDagId(jobId), !Boolean.TRUE.equals(schedule.getEnabled()), false);
+        }
+        return JobScheduleAppConvert.INSTANCE.toJobScheduleBO(schedule);
     }
 
-    private JobScheduleBO toJobScheduleBO(String jobId, WorkflowScheduleBO schedule) {
-        return new JobScheduleBO()
-                .setId(schedule.getId())
-                .setJobId(jobId)
-                .setCronExpression(schedule.getCronExpression())
-                .setEnabled(schedule.getEnabled())
-                .setSchedulerType(schedule.getSchedulerType())
-                .setNextExecuteTime(schedule.getNextExecuteTime());
+    private void validateCronExpressionIfEnabled(JobSchedule schedule) {
+        if (Boolean.TRUE.equals(schedule.getEnabled())) {
+            validateCronExpression(schedule.getCronExpression());
+        }
+    }
+
+    private void validateCronExpression(String cronExpression) {
+        Assert.isTrue(isValidCronExpression(cronExpression), new SilentException("Cron表达式不合法，请检查格式: " + cronExpression));
+    }
+
+    private boolean isValidCronExpression(String cronExpression) {
+        String normalizedCron = normalizeToAirflowCron(cronExpression);
+        if (normalizedCron == null || normalizedCron.isBlank()) {
+            return false;
+        }
+        try {
+            CronExpression.parse("0 " + normalizedCron);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    private String normalizeToAirflowCron(String cronExpression) {
+        if (cronExpression == null || cronExpression.isBlank()) {
+            return null;
+        }
+        List<String> rawParts = Arrays.stream(cronExpression.trim().split("\\s+"))
+                .filter(part -> !part.isBlank())
+                .toList();
+        if (rawParts.isEmpty()) {
+            return null;
+        }
+        List<String> parts = rawParts.stream()
+                .map(part -> part.replace("?", "*").replace("？", "*"))
+                .toList();
+        if (parts.size() == 5) {
+            if (rawParts.get(4).endsWith("?") || rawParts.get(4).endsWith("？")) {
+                return String.join(" ", parts.get(1), parts.get(2), parts.get(3), "*", "*");
+            }
+            return String.join(" ", parts);
+        }
+        if (parts.size() == 6 || parts.size() == 7) {
+            return String.join(" ", parts.subList(1, 6));
+        }
+        return null;
     }
 }

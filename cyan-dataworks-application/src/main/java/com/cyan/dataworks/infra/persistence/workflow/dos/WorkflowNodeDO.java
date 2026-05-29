@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.cyan.dataworks.enums.EngineType;
+import com.cyan.dataworks.enums.NodeType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -33,10 +35,6 @@ public class WorkflowNodeDO {
     @TableField("workflow_id")
     private Long workflowId;
 
-    /** 作业ID */
-    @TableField("job_id")
-    private Long jobId;
-
     /** 节点编码 */
     @TableField("node_code")
     private String nodeCode;
@@ -44,6 +42,18 @@ public class WorkflowNodeDO {
     /** 节点名称 */
     @TableField("node_name")
     private String nodeName;
+
+    /** 引擎类型 */
+    @TableField("engine_type")
+    private EngineType engineType;
+
+    /** 节点类型 */
+    @TableField("node_type")
+    private NodeType nodeType;
+
+    /** 节点内容 */
+    @TableField("content")
+    private String content;
 
     /** X坐标 */
     @TableField("position_x")

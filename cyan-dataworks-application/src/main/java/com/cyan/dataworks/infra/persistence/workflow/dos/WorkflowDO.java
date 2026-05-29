@@ -6,7 +6,6 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.cyan.dataworks.enums.TaskStatus;
-import com.cyan.dataworks.enums.WorkflowType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -38,10 +37,6 @@ public class WorkflowDO {
     /** 工作流描述 */
     @TableField("description")
     private String description;
-
-    /** 工作流类型 */
-    @TableField("workflow_type")
-    private WorkflowType workflowType;
 
     /** Airflow DAG ID */
     @TableField("dag_id")

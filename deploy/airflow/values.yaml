@@ -21,8 +21,6 @@ ingress:
 env:
   - name: DATAWORKS_BASE_URL
     value: "http://cyan-dataworks-svc.pre.svc.cluster.local:8080"
-  - name: DATAWORKS_DAG_DEFINITION_ENDPOINT
-    value: "/rpc/dataworks/airflow/workflow-dag-definitions"
   - name: AIRFLOW_CONN_DATAWORKS_HTTP
     value: "http://cyan-dataworks-svc.pre.svc.cluster.local:8080"
 
@@ -50,8 +48,12 @@ volumes:
 
 volumeMounts:
   - name: dataworks-airflow-dags
-    mountPath: /opt/airflow/dags/dataworks_dynamic_dag_factory.py
-    subPath: dataworks_dynamic_dag_factory.py
+    mountPath: /opt/airflow/dags/dataworks_job_dag_factory.py
+    subPath: dataworks_job_dag_factory.py
+    readOnly: true
+  - name: dataworks-airflow-dags
+    mountPath: /opt/airflow/dags/dataworks_workflow_dag_factory.py
+    subPath: dataworks_workflow_dag_factory.py
     readOnly: true
 
 postgresql:

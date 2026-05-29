@@ -167,6 +167,12 @@ public class AirflowOrchestrationGateway {
         return prefix + "_workflow_" + workflowId;
     }
 
+    /** 构建单节点作业DAG ID */
+    public String buildJobDagId(String jobId) {
+        String prefix = Optional.ofNullable(airflowProperties.getDagPrefix()).filter(value -> !value.isBlank()).orElse("dataworks");
+        return prefix + "_job_" + jobId;
+    }
+
     private AirflowDagBO toDagBO(Map<String, Object> payload) {
         return new AirflowDagBO()
                 .setDagId(str(payload.get("dag_id")))

@@ -1,7 +1,6 @@
 package com.cyan.dataworks.application.workflow.bo;
 
 import com.cyan.dataworks.enums.TaskStatus;
-import com.cyan.dataworks.enums.WorkflowType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -29,9 +28,6 @@ public class WorkflowBO {
 
     /** 工作流描述 */
     private String description;
-
-    /** 工作流类型 */
-    private WorkflowType workflowType;
 
     /** DAG ID */
     private String dagId;

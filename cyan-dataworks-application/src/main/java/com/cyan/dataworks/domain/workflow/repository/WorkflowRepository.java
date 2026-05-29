@@ -30,11 +30,6 @@ public interface WorkflowRepository {
     Workflow findByDagId(String dagId);
 
     /**
-     * 根据单节点作业ID查询工作流
-     */
-    Workflow findSingleNodeByJobId(String jobId);
-
-    /**
      * 查询Airflow工作流
      */
     List<Workflow> listAirflowWorkflows();

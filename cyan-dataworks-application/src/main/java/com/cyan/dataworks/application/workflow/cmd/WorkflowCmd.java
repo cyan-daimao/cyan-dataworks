@@ -1,6 +1,5 @@
 package com.cyan.dataworks.application.workflow.cmd;
 
-import com.cyan.dataworks.enums.WorkflowType;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -26,6 +25,4 @@ public class WorkflowCmd {
     /** 工作流描述 */
     private String description;
 
-    /** 工作流类型 */
-    private WorkflowType workflowType;
 }

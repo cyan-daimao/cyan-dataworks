@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS data_work_job (
 
 CREATE TABLE IF NOT EXISTS data_work_job_instance (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '实例ID，主键，自增',
-    job_id BIGINT NOT NULL COMMENT '关联的作业ID',
+    job_id BIGINT COMMENT '关联的单节点作业ID，工作流节点实例可为空',
     workflow_instance_id BIGINT COMMENT '关联的工作流实例ID',
     workflow_node_id BIGINT COMMENT '关联的工作流节点ID',
     job_name VARCHAR(200) COMMENT '作业名称（快照，防止作业改名后丢失历史名称）',
@@ -67,7 +67,6 @@ CREATE TABLE IF NOT EXISTS data_work_workflow (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '工作流ID',
     name VARCHAR(200) NOT NULL COMMENT '工作流名称',
     description VARCHAR(500) COMMENT '工作流描述',
-    workflow_type VARCHAR(30) NOT NULL DEFAULT 'WORKFLOW' COMMENT '工作流类型：SINGLE_NODE / WORKFLOW',
     dag_id VARCHAR(200) COMMENT 'Airflow DAG ID',
     status VARCHAR(20) DEFAULT 'DRAFT' COMMENT '工作流状态：DRAFT / ONLINE / OFFLINE',
     created_by VARCHAR(100) NOT NULL DEFAULT 'system' COMMENT '创建人',
@@ -76,16 +75,17 @@ CREATE TABLE IF NOT EXISTS data_work_workflow (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted_at DATETIME(6) DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     INDEX idx_name (name) COMMENT '工作流名称索引',
-    INDEX idx_dag_id (dag_id) COMMENT 'DAG ID索引',
-    INDEX idx_workflow_type (workflow_type) COMMENT '工作流类型索引'
-) COMMENT = '数据加工工作流表，所有Airflow DAG均由工作流生成';
+    INDEX idx_dag_id (dag_id) COMMENT 'DAG ID索引'
+) COMMENT = '数据加工工作流表，仅保存真正的工作流任务';
 
 CREATE TABLE IF NOT EXISTS data_work_workflow_node (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '工作流节点ID',
     workflow_id BIGINT NOT NULL COMMENT '工作流ID',
-    job_id BIGINT NOT NULL COMMENT '关联作业ID',
     node_code VARCHAR(100) NOT NULL COMMENT '节点编码，工作流内稳定唯一',
     node_name VARCHAR(200) NOT NULL COMMENT '节点名称',
+    engine_type VARCHAR(20) NOT NULL COMMENT '引擎类型：SPARK / FLINK / SHELL / PYTHON',
+    node_type VARCHAR(30) NOT NULL COMMENT '节点类型：SPARK_SQL / FLINK_SQL / SPARK_BATCH / FLINK_BATCH / SHELL / PYTHON / DATA_QUALITY / VIRTUAL',
+    content TEXT NOT NULL COMMENT '节点内容，支持SQL、Shell、Python等正文',
     position_x INT DEFAULT 0 COMMENT '画布X坐标',
     position_y INT DEFAULT 0 COMMENT '画布Y坐标',
     config_json TEXT COMMENT '节点配置JSON',
@@ -95,9 +95,8 @@ CREATE TABLE IF NOT EXISTS data_work_workflow_node (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted_at DATETIME(6) DEFAULT NULL COMMENT '删除时间，逻辑删除标记',
     UNIQUE KEY uk_workflow_node_code (workflow_id, node_code, deleted_at) COMMENT '工作流内节点编码唯一',
-    INDEX idx_workflow_id (workflow_id) COMMENT '工作流ID索引',
-    INDEX idx_job_id (job_id) COMMENT '作业ID索引'
-) COMMENT = '工作流节点表';
+    INDEX idx_workflow_id (workflow_id) COMMENT '工作流ID索引'
+) COMMENT = '工作流内部可执行节点表';
 
 CREATE TABLE IF NOT EXISTS data_work_workflow_edge (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '工作流依赖边ID',

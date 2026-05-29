@@ -64,6 +64,4 @@ public interface WorkflowService {
     /** 查询Airflow DAG定义 */
     List<WorkflowDagDefinitionBO> listAirflowDagDefinitions();
 
-    /** 确保作业存在默认单节点工作流 */
-    WorkflowBO ensureSingleNodeWorkflow(String jobId, String operator);
 }

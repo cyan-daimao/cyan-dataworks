@@ -45,7 +45,6 @@ public interface WorkflowInfraConvert {
      */
     @Mapping(target = "id", expression = "java(com.cyan.arch.common.util.Convert.toStr(nodeDO.getId()))")
     @Mapping(target = "workflowId", expression = "java(com.cyan.arch.common.util.Convert.toStr(nodeDO.getWorkflowId()))")
-    @Mapping(target = "jobId", expression = "java(com.cyan.arch.common.util.Convert.toStr(nodeDO.getJobId()))")
     WorkflowNode toNode(WorkflowNodeDO nodeDO);
 
     /**
@@ -53,7 +52,6 @@ public interface WorkflowInfraConvert {
      */
     @Mapping(target = "id", expression = "java(com.cyan.arch.common.util.Convert.toLong(node.getId()))")
     @Mapping(target = "workflowId", expression = "java(com.cyan.arch.common.util.Convert.toLong(node.getWorkflowId()))")
-    @Mapping(target = "jobId", expression = "java(com.cyan.arch.common.util.Convert.toLong(node.getJobId()))")
     WorkflowNodeDO toNodeDO(WorkflowNode node);
 
     /**

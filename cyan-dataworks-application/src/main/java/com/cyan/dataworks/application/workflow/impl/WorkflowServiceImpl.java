@@ -14,8 +14,6 @@ import com.cyan.dataworks.application.workflow.cmd.WorkflowDefinitionCmd;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowDependencyCmd;
 import com.cyan.dataworks.application.workflow.cmd.WorkflowScheduleCmd;
 import com.cyan.dataworks.application.workflow.convert.WorkflowAppConvert;
-import com.cyan.dataworks.domain.job.Job;
-import com.cyan.dataworks.domain.job.repository.JobRepository;
 import com.cyan.dataworks.domain.workflow.Workflow;
 import com.cyan.dataworks.domain.workflow.WorkflowDependency;
 import com.cyan.dataworks.domain.workflow.WorkflowEdge;
@@ -30,7 +28,6 @@ import com.cyan.dataworks.domain.workflow.repository.WorkflowScheduleRepository;
 import com.cyan.dataworks.enums.JobDependencyType;
 import com.cyan.dataworks.enums.SchedulerType;
 import com.cyan.dataworks.enums.TaskStatus;
-import com.cyan.dataworks.enums.WorkflowType;
 import com.cyan.dataworks.infra.remote.airflow.AirflowOrchestrationGateway;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
@@ -72,9 +69,6 @@ public class WorkflowServiceImpl implements WorkflowService {
     /** 工作流调度仓储 */
     private final WorkflowScheduleRepository workflowScheduleRepository;
 
-    /** 作业仓储 */
-    private final JobRepository jobRepository;
-
     /** Airflow编排网关 */
     private final AirflowOrchestrationGateway airflowGateway;
 
@@ -83,14 +77,12 @@ public class WorkflowServiceImpl implements WorkflowService {
                                WorkflowEdgeRepository workflowEdgeRepository,
                                WorkflowDependencyRepository workflowDependencyRepository,
                                WorkflowScheduleRepository workflowScheduleRepository,
-                               JobRepository jobRepository,
                                AirflowOrchestrationGateway airflowGateway) {
         this.workflowRepository = workflowRepository;
         this.workflowNodeRepository = workflowNodeRepository;
         this.workflowEdgeRepository = workflowEdgeRepository;
         this.workflowDependencyRepository = workflowDependencyRepository;
         this.workflowScheduleRepository = workflowScheduleRepository;
-        this.jobRepository = jobRepository;
         this.airflowGateway = airflowGateway;
     }
 
@@ -118,9 +110,6 @@ public class WorkflowServiceImpl implements WorkflowService {
         Workflow workflow = WorkflowAppConvert.INSTANCE.toWorkflow(cmd)
                 .setCreatedBy(createdBy)
                 .setUpdatedBy(createdBy);
-        if (workflow.getWorkflowType() == null) {
-            workflow.setWorkflowType(WorkflowType.WORKFLOW);
-        }
         workflow = workflow.save(workflowRepository);
         workflow.setDagId(airflowGateway.buildWorkflowDagId(workflow.getId()));
         workflow = workflow.update(workflowRepository);
@@ -140,9 +129,6 @@ public class WorkflowServiceImpl implements WorkflowService {
                 .setCreatedBy(existing.getCreatedBy())
                 .setCreatedAt(existing.getCreatedAt())
                 .setUpdatedBy(updatedBy);
-        if (workflow.getWorkflowType() == null) {
-            workflow.setWorkflowType(existing.getWorkflowType());
-        }
         workflow = workflow.update(workflowRepository);
         return WorkflowAppConvert.INSTANCE.toWorkflowBO(workflow);
     }
@@ -316,62 +302,15 @@ public class WorkflowServiceImpl implements WorkflowService {
                 .toList();
     }
 
-    /** 确保作业存在默认单节点工作流 */
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public WorkflowBO ensureSingleNodeWorkflow(String jobId, String operator) {
-        Workflow existing = workflowRepository.findSingleNodeByJobId(jobId);
-        Job job = jobRepository.findById(jobId);
-        Assert.notNull(job, new SilentException("作业不存在"));
-        if (existing != null) {
-            existing.setName(job.getName())
-                    .setDescription(job.getDescription())
-                    .setUpdatedBy(operator);
-            Workflow workflow = existing.update(workflowRepository);
-            WorkflowNode node = new WorkflowNode()
-                    .setWorkflowId(workflow.getId())
-                    .setJobId(jobId)
-                    .setNodeCode("node_" + jobId)
-                    .setNodeName(job.getName())
-                    .setPositionX(120)
-                    .setPositionY(120)
-                    .setCreatedBy(workflow.getCreatedBy())
-                    .setUpdatedBy(operator);
-            node.validateDefinition();
-            workflowNodeRepository.replaceByWorkflowId(workflow.getId(), List.of(node));
-            return WorkflowAppConvert.INSTANCE.toWorkflowBO(workflow);
-        }
-        Workflow workflow = new Workflow()
-                .setName(job.getName())
-                .setDescription(job.getDescription())
-                .setWorkflowType(WorkflowType.SINGLE_NODE)
-                .setStatus(TaskStatus.DRAFT)
-                .setCreatedBy(operator)
-                .setUpdatedBy(operator)
-                .save(workflowRepository);
-        workflow.setDagId(airflowGateway.buildWorkflowDagId(workflow.getId()));
-        workflow = workflow.update(workflowRepository);
-        WorkflowNode node = new WorkflowNode()
-                .setWorkflowId(workflow.getId())
-                .setJobId(jobId)
-                .setNodeCode("node_" + jobId)
-                .setNodeName(job.getName())
-                .setPositionX(120)
-                .setPositionY(120)
-                .setCreatedBy(operator)
-                .setUpdatedBy(operator);
-        node.validateDefinition();
-        workflowNodeRepository.replaceByWorkflowId(workflow.getId(), List.of(node));
-        return WorkflowAppConvert.INSTANCE.toWorkflowBO(workflow);
-    }
-
     private List<WorkflowNode> buildNodes(String workflowId, WorkflowDefinitionCmd cmd, String updatedBy) {
         return Optional.ofNullable(cmd).map(WorkflowDefinitionCmd::getNodes).orElse(List.of()).stream()
                 .map(nodeCmd -> new WorkflowNode()
                         .setWorkflowId(workflowId)
-                        .setJobId(nodeCmd.getJobId())
                         .setNodeCode(firstNotBlank(nodeCmd.getNodeCode(), nodeCmd.getId()))
                         .setNodeName(nodeCmd.getNodeName())
+                        .setEngineType(nodeCmd.getEngineType())
+                        .setNodeType(nodeCmd.getNodeType())
+                        .setContent(nodeCmd.getContent())
                         .setPositionX(nodeCmd.getPositionX())
                         .setPositionY(nodeCmd.getPositionY())
                         .setConfigJson(nodeCmd.getConfigJson())
@@ -383,14 +322,9 @@ public class WorkflowServiceImpl implements WorkflowService {
 
     private void validateNodes(Workflow workflow, List<WorkflowNode> nodes) {
         Assert.isTrue(!nodes.isEmpty(), new SilentException("工作流至少需要一个节点"));
-        if (workflow.getWorkflowType() == WorkflowType.SINGLE_NODE) {
-            Assert.isTrue(nodes.size() == 1, new SilentException("单节点工作流只能包含一个节点"));
-        }
         Set<String> nodeCodes = new LinkedHashSet<>();
         for (WorkflowNode node : nodes) {
             Assert.isTrue(nodeCodes.add(node.getNodeCode()), new SilentException("节点编码重复: " + node.getNodeCode()));
-            Job job = jobRepository.findById(node.getJobId());
-            Assert.notNull(job, new SilentException("节点关联作业不存在: " + node.getJobId()));
         }
     }
 
@@ -465,9 +399,7 @@ public class WorkflowServiceImpl implements WorkflowService {
         List<WorkflowEdge> edges = workflowEdgeRepository.listByWorkflowId(workflow.getId());
         validateAcyclic(nodes, edges);
         for (WorkflowNode node : nodes) {
-            Job job = jobRepository.findById(node.getJobId());
-            Assert.notNull(job, new SilentException("节点关联作业不存在: " + node.getJobId()));
-            Assert.isTrue(job.getStatus() == TaskStatus.ONLINE, new SilentException("节点关联作业未发布: " + job.getName()));
+            node.validateDefinition();
         }
     }
 
@@ -500,6 +432,7 @@ public class WorkflowServiceImpl implements WorkflowService {
                 .setWorkflowId(workflow.getId())
                 .setWorkflowName(workflow.getName())
                 .setCronExpression(schedule.getCronExpression())
+                .setScheduleEnabled(schedule.getEnabled())
                 .setTasks(tasks)
                 .setExternalDependencies(externalDependencies));
     }
@@ -531,10 +464,6 @@ public class WorkflowServiceImpl implements WorkflowService {
     private Optional<WorkflowDagDefinitionBO.TaskBO> buildDagTask(WorkflowNode node,
                                                                   List<WorkflowEdge> edges,
                                                                   Map<String, WorkflowNode> nodeById) {
-        Job job = jobRepository.findById(node.getJobId());
-        if (job == null || job.getStatus() != TaskStatus.ONLINE) {
-            return Optional.empty();
-        }
         List<String> upstreamTaskIds = edges.stream()
                 .filter(edge -> node.getId().equals(edge.getDownstreamNodeId()))
                 .map(WorkflowEdge::getUpstreamNodeId)
@@ -545,10 +474,9 @@ public class WorkflowServiceImpl implements WorkflowService {
         return Optional.of(new WorkflowDagDefinitionBO.TaskBO()
                 .setTaskId(taskId(node))
                 .setNodeId(node.getId())
-                .setJobId(job.getId())
-                .setJobName(job.getName())
-                .setEngineType(job.getEngineType())
-                .setNodeType(job.getNodeType())
+                .setNodeName(node.getNodeName())
+                .setEngineType(node.getEngineType())
+                .setNodeType(node.getNodeType())
                 .setUpstreamTaskIds(upstreamTaskIds));
     }
 

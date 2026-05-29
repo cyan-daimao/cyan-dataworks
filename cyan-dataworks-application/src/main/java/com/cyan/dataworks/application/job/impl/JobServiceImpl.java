@@ -6,6 +6,7 @@ import com.cyan.arch.common.api.SilentException;
 import com.cyan.arch.common.util.StrUtils;
 import com.cyan.dataworks.application.job.JobService;
 import com.cyan.dataworks.application.job.bo.JobBO;
+import com.cyan.dataworks.application.job.bo.JobDagDefinitionBO;
 import com.cyan.dataworks.application.job.cmd.JobCmd;
 import com.cyan.dataworks.application.job.convert.JobAppConvert;
 import com.cyan.dataworks.application.job.dependency.JobDependencyService;
@@ -13,15 +14,19 @@ import com.cyan.dataworks.application.job.runtime.JobExecutionPlanner;
 import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfig;
 import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfigParser;
 import com.cyan.dataworks.application.job.lineage.JobLineageSyncService;
-import com.cyan.dataworks.application.workflow.WorkflowService;
-import com.cyan.dataworks.application.workflow.bo.WorkflowBO;
 import com.cyan.dataworks.domain.job.Job;
+import com.cyan.dataworks.domain.job.dependency.JobDependency;
+import com.cyan.dataworks.domain.job.dependency.repository.JobDependencyRepository;
 import com.cyan.dataworks.domain.job.query.JobPageQuery;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
+import com.cyan.dataworks.domain.job.schedule.JobSchedule;
+import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
 import com.cyan.dataworks.domain.job_instance.JobInstance;
 import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
 import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
+import com.cyan.dataworks.enums.TaskStatus;
+import com.cyan.dataworks.infra.remote.airflow.AirflowOrchestrationGateway;
 import com.cyan.dataworks.infra.remote.flink.FlinkRemoteService;
 import com.cyan.dataworks.infra.remote.flink.operator.FlinkApplicationOperatorService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -52,7 +57,9 @@ public class JobServiceImpl implements JobService {
     private final FlinkRuntimeConfigParser flinkRuntimeConfigParser;
     private final JobLineageSyncService jobLineageSyncService;
     private final JobDependencyService jobDependencyService;
-    private final WorkflowService workflowService;
+    private final JobScheduleRepository jobScheduleRepository;
+    private final JobDependencyRepository jobDependencyRepository;
+    private final AirflowOrchestrationGateway airflowGateway;
     private final ObjectMapper objectMapper;
 
     public JobServiceImpl(JobRepository jobRepository,
@@ -63,7 +70,9 @@ public class JobServiceImpl implements JobService {
                           FlinkRuntimeConfigParser flinkRuntimeConfigParser,
                           JobLineageSyncService jobLineageSyncService,
                           JobDependencyService jobDependencyService,
-                          WorkflowService workflowService,
+                          JobScheduleRepository jobScheduleRepository,
+                          JobDependencyRepository jobDependencyRepository,
+                          AirflowOrchestrationGateway airflowGateway,
                           ObjectMapper objectMapper) {
         this.jobRepository = jobRepository;
         this.jobInstanceRepository = jobInstanceRepository;
@@ -73,7 +82,9 @@ public class JobServiceImpl implements JobService {
         this.flinkRuntimeConfigParser = flinkRuntimeConfigParser;
         this.jobLineageSyncService = jobLineageSyncService;
         this.jobDependencyService = jobDependencyService;
-        this.workflowService = workflowService;
+        this.jobScheduleRepository = jobScheduleRepository;
+        this.jobDependencyRepository = jobDependencyRepository;
+        this.airflowGateway = airflowGateway;
         this.objectMapper = objectMapper;
     }
 
@@ -119,7 +130,6 @@ public class JobServiceImpl implements JobService {
         job.setUpdatedBy(createdBy);
         job = job.save(jobRepository);
         jobLineageSyncService.sync(job);
-        workflowService.ensureSingleNodeWorkflow(job.getId(), createdBy);
         return JobAppConvert.INSTANCE.toJobBO(job);
     }
 
@@ -138,7 +148,6 @@ public class JobServiceImpl implements JobService {
         job.setUpdatedBy(updatedBy);
         job = job.update(jobRepository);
         jobLineageSyncService.sync(job);
-        workflowService.ensureSingleNodeWorkflow(job.getId(), updatedBy);
         return JobAppConvert.INSTANCE.toJobBO(job);
     }
 
@@ -153,6 +162,11 @@ public class JobServiceImpl implements JobService {
         deleteFlinkApplicationIfNeeded(existing);
         jobDependencyService.deleteByJobId(id);
         existing.delete(jobRepository);
+        try {
+            airflowGateway.deleteDag(airflowGateway.buildJobDagId(id));
+        } catch (Exception e) {
+            log.warn("DataWorks作业DAG删除跳过: jobId={}, reason={}", id, e.getMessage());
+        }
     }
 
     /**
@@ -168,25 +182,13 @@ public class JobServiceImpl implements JobService {
         existing.setUpdatedBy(updatedBy);
         Job job = existing.publish(jobRepository);
         jobLineageSyncService.sync(job);
-        publishDefaultWorkflowIfSchedulable(job, updatedBy);
+        JobSchedule schedule = jobScheduleRepository.findByJobId(id);
+        if (schedule != null) {
+            airflowGateway.syncDagPaused(airflowGateway.buildJobDagId(id), !Boolean.TRUE.equals(schedule.getEnabled()), false);
+        }
         log.info("DataWorks作业发布完成: jobId={}, name={}, engineType={}, nodeType={}, status={}",
                 job.getId(), job.getName(), job.getEngineType(), job.getNodeType(), job.getStatus());
         return JobAppConvert.INSTANCE.toJobBO(job);
-    }
-
-    /**
-     * 若单节点工作流已配置调度，则随作业发布一并发布工作流。
-     */
-    private void publishDefaultWorkflowIfSchedulable(Job job, String updatedBy) {
-        try {
-            WorkflowBO workflow = workflowService.ensureSingleNodeWorkflow(job.getId(), updatedBy);
-            if (workflowService.findSchedule(workflow.getId()) == null) {
-                return;
-            }
-            workflowService.publish(workflow.getId(), updatedBy);
-        } catch (Exception e) {
-            log.warn("DataWorks作业默认单节点工作流发布跳过: jobId={}, reason={}", job.getId(), e.getMessage());
-        }
     }
 
     /**
@@ -344,6 +346,43 @@ public class JobServiceImpl implements JobService {
         existing.setUpdatedBy(updatedBy);
         Job job = existing.offline(jobRepository);
         deleteFlinkApplicationIfNeeded(job);
+        airflowGateway.syncDagPaused(airflowGateway.buildJobDagId(id), true, false);
         return JobAppConvert.INSTANCE.toJobBO(job);
+    }
+
+    /**
+     * 查询Airflow单节点作业DAG定义
+     */
+    @Override
+    public List<JobDagDefinitionBO> listAirflowDagDefinitions() {
+        return jobScheduleRepository.listAirflow().stream()
+                .map(this::buildDagDefinition)
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    private Optional<JobDagDefinitionBO> buildDagDefinition(JobSchedule schedule) {
+        Job job = jobRepository.findById(schedule.getJobId());
+        if (job == null || job.getStatus() != TaskStatus.ONLINE) {
+            return Optional.empty();
+        }
+        List<JobDagDefinitionBO.ExternalDependencyBO> externalDependencies = jobDependencyRepository.listByDownstreamJobId(job.getId()).stream()
+                .map(JobDependency::getUpstreamJobId)
+                .map(jobRepository::findById)
+                .filter(upstream -> upstream != null && upstream.getStatus() == TaskStatus.ONLINE)
+                .map(upstream -> new JobDagDefinitionBO.ExternalDependencyBO()
+                        .setUpstreamDagId(airflowGateway.buildJobDagId(upstream.getId()))
+                        .setUpstreamJobId(upstream.getId())
+                        .setUpstreamJobName(upstream.getName()))
+                .toList();
+        return Optional.of(new JobDagDefinitionBO()
+                .setDagId(airflowGateway.buildJobDagId(job.getId()))
+                .setJobId(job.getId())
+                .setJobName(job.getName())
+                .setCronExpression(schedule.getCronExpression())
+                .setScheduleEnabled(schedule.getEnabled())
+                .setEngineType(job.getEngineType())
+                .setNodeType(job.getNodeType())
+                .setExternalDependencies(externalDependencies));
     }
 }

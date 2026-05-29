@@ -4,7 +4,6 @@ import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.SilentException;
 import com.cyan.dataworks.domain.workflow.repository.WorkflowRepository;
 import com.cyan.dataworks.enums.TaskStatus;
-import com.cyan.dataworks.enums.WorkflowType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -38,11 +37,6 @@ public class Workflow {
      * 工作流描述
      */
     private String description;
-
-    /**
-     * 工作流类型
-     */
-    private WorkflowType workflowType;
 
     /**
      * Airflow DAG ID
@@ -87,9 +81,6 @@ public class Workflow {
         validateDefinition();
         if (this.status == null) {
             this.status = TaskStatus.DRAFT;
-        }
-        if (this.workflowType == null) {
-            this.workflowType = WorkflowType.WORKFLOW;
         }
         return repository.save(this);
     }
@@ -136,8 +127,5 @@ public class Workflow {
      */
     public void validateDefinition() {
         Assert.notBlank(this.name, new SilentException("工作流名称不能为空"));
-        if (this.workflowType == null) {
-            this.workflowType = WorkflowType.WORKFLOW;
-        }
     }
 }
