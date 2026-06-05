@@ -33,6 +33,8 @@ import com.cyan.dataworks.infra.remote.airflow.AirflowRemoteLogService;
 import com.cyan.dataworks.infra.remote.flink.FlinkRemoteService;
 import com.cyan.dataworks.infra.remote.flink.operator.bo.FlinkPodLogBO;
 import com.cyan.dataworks.infra.remote.rustfs.RustFsLogService;
+import com.cyan.dataworks.infra.remote.spark.operator.SparkApplicationOperatorService;
+import com.cyan.dataworks.infra.remote.spark.operator.bo.SparkApplicationBO;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -59,6 +61,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
     private final JobExecutorRegistry jobExecutorRegistry;
     private final AirflowRemoteLogService airflowRemoteLogService;
     private final RustFsLogService rustFsLogService;
+    private final SparkApplicationOperatorService sparkApplicationOperatorService;
     private final ScriptRuntimeProperties scriptRuntimeProperties;
     private final WorkflowInstanceRepository workflowInstanceRepository;
     private final WorkflowNodeRepository workflowNodeRepository;
@@ -72,6 +75,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
                                   JobExecutorRegistry jobExecutorRegistry,
                                   AirflowRemoteLogService airflowRemoteLogService,
                                   RustFsLogService rustFsLogService,
+                                  SparkApplicationOperatorService sparkApplicationOperatorService,
                                   ScriptRuntimeProperties scriptRuntimeProperties,
                                   WorkflowInstanceRepository workflowInstanceRepository,
                                   WorkflowNodeRepository workflowNodeRepository,
@@ -84,6 +88,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
         this.jobExecutorRegistry = jobExecutorRegistry;
         this.airflowRemoteLogService = airflowRemoteLogService;
         this.rustFsLogService = rustFsLogService;
+        this.sparkApplicationOperatorService = sparkApplicationOperatorService;
         this.scriptRuntimeProperties = scriptRuntimeProperties;
         this.workflowInstanceRepository = workflowInstanceRepository;
         this.workflowNodeRepository = workflowNodeRepository;
@@ -254,7 +259,7 @@ public class JobInstanceServiceImpl implements JobInstanceService {
                     .setStatus(job.getStatus());
             JobExecutionResult result = jobExecutorRegistry.get(job.getNodeType()).execute(executeJob, instance);
             if (Boolean.TRUE.equals(result.getAsyncSubmitted())) {
-                instance.bindRuntimeJob(result.getRuntimeJobName(), jobInstanceRepository);
+                instance = bindAsyncRuntime(instance, result);
             } else {
                 instance.markSuccess(result.getResultData(), System.currentTimeMillis() - startTime, jobInstanceRepository);
             }
@@ -272,6 +277,12 @@ public class JobInstanceServiceImpl implements JobInstanceService {
     public JobInstanceBO terminate(String instanceId) {
         JobInstance instance = jobInstanceRepository.findById(instanceId);
         Assert.notNull(instance, new SilentException("实例不存在"));
+        if (instance.getEngineType() == EngineType.SPARK) {
+            sparkApplicationOperatorService.delete(
+                    resolveRuntimeApplicationName(instance),
+                    instance.getApplicationNamespace(),
+                    instance.getConfigMapName());
+        }
         instance.terminate(jobInstanceRepository);
         return JobInstanceAppConvert.INSTANCE.toJobInstanceBO(instance);
     }
@@ -302,7 +313,10 @@ public class JobInstanceServiceImpl implements JobInstanceService {
      */
     @Override
     public JobInstanceBO findSchedulerStatus(String id) {
-        return findById(id);
+        JobInstance instance = jobInstanceRepository.findById(id);
+        Assert.notNull(instance, new SilentException("实例不存在"));
+        instance = syncSparkApplicationStatus(instance);
+        return JobInstanceAppConvert.INSTANCE.toJobInstanceBO(instance);
     }
 
     /**
@@ -335,6 +349,25 @@ public class JobInstanceServiceImpl implements JobInstanceService {
     public JobInstanceLogBO getLogs(String id, JobInstanceLogQuery query) {
         JobInstance instance = jobInstanceRepository.findById(id);
         Assert.notNull(instance, new SilentException("实例不存在"));
+        if (instance.getEngineType() == EngineType.SPARK) {
+            int tailLines = normalizeTailLines(Optional.ofNullable(query).map(JobInstanceLogQuery::getTailLines).orElse(null));
+            String applicationName = resolveRuntimeApplicationName(instance);
+            String logs = sparkApplicationOperatorService.readDriverLog(applicationName, instance.getApplicationNamespace(), tailLines);
+            if (logs == null || logs.isBlank()) {
+                logs = Optional.ofNullable(instance.getResultData())
+                        .filter(value -> !value.isBlank())
+                        .orElse(Optional.ofNullable(instance.getErrorMessage()).orElse(""));
+            }
+            return new JobInstanceLogBO()
+                    .setInstanceId(instance.getId())
+                    .setDeploymentName(applicationName)
+                    .setNamespace(Optional.ofNullable(instance.getApplicationNamespace()).orElse(""))
+                    .setRole(JobLogRole.ALL)
+                    .setTailLines(tailLines)
+                    .setPods(List.of())
+                    .setLogs(logs)
+                    .setMessage(logs == null || logs.isBlank() ? "暂无Spark Driver日志" : "Spark Driver日志读取成功");
+        }
         if (airflowRemoteLogService.supports(instance)) {
             String logs = airflowRemoteLogService.readTaskLog(instance);
             return new JobInstanceLogBO()
@@ -403,6 +436,85 @@ public class JobInstanceServiceImpl implements JobInstanceService {
                 .setPods(pods)
                 .setLogs(logs)
                 .setMessage(message);
+    }
+
+    /**
+     * 绑定异步运行资源
+     */
+    private JobInstance bindAsyncRuntime(JobInstance instance, JobExecutionResult result) {
+        if (result.getApplicationName() != null && !result.getApplicationName().isBlank()) {
+            return instance.bindSparkApplication(
+                    result.getRuntimeJobName(),
+                    result.getApplicationName(),
+                    result.getApplicationNamespace(),
+                    result.getConfigMapName(),
+                    jobInstanceRepository);
+        }
+        return instance.bindRuntimeJob(result.getRuntimeJobName(), jobInstanceRepository);
+    }
+
+    /**
+     * 同步SparkApplication状态
+     */
+    private JobInstance syncSparkApplicationStatus(JobInstance instance) {
+        if (instance.getEngineType() != EngineType.SPARK || instance.getStatus() != ExecutionStatus.RUNNING) {
+            return instance;
+        }
+        String applicationName = resolveRuntimeApplicationName(instance);
+        if (applicationName == null || applicationName.isBlank()) {
+            return instance;
+        }
+        SparkApplicationBO application = sparkApplicationOperatorService.getStatus(applicationName, instance.getApplicationNamespace());
+        if (Boolean.TRUE.equals(application.getCompleted())) {
+            String resultData = """
+                    {"applicationName":"%s","namespace":"%s","state":"%s","driverPodName":"%s"}
+                    """.formatted(
+                    safeJson(application.getApplicationName()),
+                    safeJson(application.getNamespace()),
+                    safeJson(application.getState()),
+                    safeJson(application.getDriverPodName())).trim();
+            instance = instance.markSuccess(resultData, calculateCostTimeMs(instance), jobInstanceRepository);
+            syncWorkflowInstanceState(instance);
+            return instance;
+        }
+        if (Boolean.TRUE.equals(application.getFailed())) {
+            String logs = sparkApplicationOperatorService.readDriverLog(applicationName, instance.getApplicationNamespace(), 2000);
+            String message = Optional.ofNullable(application.getMessage())
+                    .filter(value -> !value.isBlank())
+                    .orElseGet(() -> Optional.ofNullable(logs)
+                            .filter(value -> !value.isBlank())
+                            .orElse("SparkApplication执行失败：" + application.getState()));
+            instance = instance.markFailed(message, calculateCostTimeMs(instance), jobInstanceRepository);
+            syncWorkflowInstanceState(instance);
+            return instance;
+        }
+        return instance;
+    }
+
+    /**
+     * 解析运行应用名称
+     */
+    private String resolveRuntimeApplicationName(JobInstance instance) {
+        return Optional.ofNullable(instance.getApplicationName())
+                .filter(value -> !value.isBlank())
+                .orElse(instance.getRuntimeJobName());
+    }
+
+    /**
+     * 计算实例耗时
+     */
+    private long calculateCostTimeMs(JobInstance instance) {
+        if (instance.getCreatedAt() == null) {
+            return 0L;
+        }
+        return java.time.Duration.between(instance.getCreatedAt(), LocalDateTime.now()).toMillis();
+    }
+
+    /**
+     * 转义JSON字符串内容
+     */
+    private String safeJson(String value) {
+        return Optional.ofNullable(value).orElse("").replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     /**

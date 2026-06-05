@@ -240,6 +240,22 @@ public class JobInstance {
     }
 
     /**
+     * 绑定SparkApplication运行信息
+     */
+    public JobInstance bindSparkApplication(String runtimeJobName,
+                                            String applicationName,
+                                            String applicationNamespace,
+                                            String configMapName,
+                                            JobInstanceRepository repository) {
+        Assert.notBlank(this.id, new SilentException("实例id不能为空"));
+        this.runtimeJobName = runtimeJobName;
+        this.applicationName = applicationName;
+        this.applicationNamespace = applicationNamespace;
+        this.configMapName = configMapName;
+        return repository.updateById(this);
+    }
+
+    /**
      * 回调标记实例成功
      */
     public JobInstance markCallbackSuccess(String resultData,

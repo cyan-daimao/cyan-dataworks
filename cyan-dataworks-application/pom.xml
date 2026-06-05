@@ -41,10 +41,6 @@
         </dependency>
         <dependency>
             <groupId>com.cyan</groupId>
-            <artifactId>cyan-datagateway-client</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.cyan</groupId>
             <artifactId>cyan-dataman-client</artifactId>
         </dependency>
         <dependency>

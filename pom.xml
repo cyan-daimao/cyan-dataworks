@@ -11,6 +11,7 @@
     <modules>
         <module>cyan-dataworks-application</module>
         <module>cyan-dataworks-client</module>
+        <module>cyan-dataworks-spark-runner</module>
     </modules>
 
     <properties>
@@ -19,12 +20,14 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <arch.version>1.0-SNAPSHOT</arch.version>
         <cyan-employee-login.version>1.0-SNAPSHOT</cyan-employee-login.version>
-        <cyan-datagateway-client.version>1.0-SNAPSHOT</cyan-datagateway-client.version>
         <cyan-dataman-client.version>1.0-SNAPSHOT</cyan-dataman-client.version>
         <lombok.version>1.18.42</lombok.version>
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <fabric8.version>6.13.4</fabric8.version>
+        <spark.version>4.0.2</spark.version>
+        <scala.binary.version>2.13</scala.binary.version>
+        <iceberg.version>1.10.1</iceberg.version>
     </properties>
 
     <dependencyManagement>
@@ -50,11 +53,6 @@
                 <groupId>com.cyan</groupId>
                 <artifactId>cyan-employee-login</artifactId>
                 <version>${cyan-employee-login.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.cyan</groupId>
-                <artifactId>cyan-datagateway-client</artifactId>
-                <version>${cyan-datagateway-client.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.cyan</groupId>

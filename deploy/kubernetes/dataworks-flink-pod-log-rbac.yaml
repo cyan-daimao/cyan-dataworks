@@ -1,7 +1,7 @@
 # ============================================================
-# Spring Boot 操作 FlinkDeployment 所需的 RBAC
-# Spring Boot 通过 Fabric8 K8s Client 在 flink/dataworks namespace 中
-# 创建/更新/删除 FlinkDeployment CR、ConfigMap、脚本K8s Job，并读取 Pod/Pod 日志
+# Spring Boot 操作 DataWorks 运行时资源所需的 RBAC
+# Spring Boot 通过 Fabric8 K8s Client 创建/更新/删除 FlinkDeployment、
+# SparkApplication、ConfigMap、脚本K8s Job，并读取 Pod/Pod 日志
 # ============================================================
 
 apiVersion: rbac.authorization.k8s.io/v1
@@ -11,6 +11,10 @@ metadata:
 rules:
   - apiGroups: ["flink.apache.org"]
     resources: ["flinkdeployments"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+
+  - apiGroups: ["sparkoperator.k8s.io"]
+    resources: ["sparkapplications"]
     verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
 
   - apiGroups: [""]

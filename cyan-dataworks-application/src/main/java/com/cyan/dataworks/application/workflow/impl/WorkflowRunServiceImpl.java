@@ -214,7 +214,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
             executeJob.setContent(snapshotContent);
             JobExecutionResult result = jobExecutorRegistry.get(node.getNodeType()).execute(executeJob, instance);
             if (Boolean.TRUE.equals(result.getAsyncSubmitted())) {
-                instance.bindRuntimeJob(result.getRuntimeJobName(), jobInstanceRepository);
+                bindAsyncRuntime(instance, result);
             } else {
                 instance.markSuccess(result.getResultData(), System.currentTimeMillis() - startTime, jobInstanceRepository);
             }
@@ -222,6 +222,19 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
             instance.markFailed(e.getMessage(), System.currentTimeMillis() - startTime, jobInstanceRepository);
         }
         return JobInstanceAppConvert.INSTANCE.toJobInstanceBO(instance);
+    }
+
+    private void bindAsyncRuntime(JobInstance instance, JobExecutionResult result) {
+        if (result.getApplicationName() != null && !result.getApplicationName().isBlank()) {
+            instance.bindSparkApplication(
+                    result.getRuntimeJobName(),
+                    result.getApplicationName(),
+                    result.getApplicationNamespace(),
+                    result.getConfigMapName(),
+                    jobInstanceRepository);
+            return;
+        }
+        instance.bindRuntimeJob(result.getRuntimeJobName(), jobInstanceRepository);
     }
 
     private WorkflowInstance ensureScheduledWorkflowInstance(Workflow workflow, WorkflowRunBySchedulerCmd cmd) {

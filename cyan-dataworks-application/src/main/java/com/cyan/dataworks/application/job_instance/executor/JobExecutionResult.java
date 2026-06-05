@@ -31,4 +31,19 @@ public class JobExecutionResult {
      * 运行时任务名称
      */
     private String runtimeJobName;
+
+    /**
+     * 应用名称
+     */
+    private String applicationName;
+
+    /**
+     * 应用命名空间
+     */
+    private String applicationNamespace;
+
+    /**
+     * ConfigMap名称
+     */
+    private String configMapName;
 }

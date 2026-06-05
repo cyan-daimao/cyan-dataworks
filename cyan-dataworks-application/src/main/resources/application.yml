@@ -52,3 +52,28 @@ airflow:
     secret-key: rustfsadmin
     bucket: airflow-logs
     base-prefix: dataworks-airflow
+dataworks:
+  spark-operator:
+    namespace: spark
+    api-version: sparkoperator.k8s.io/v1beta2
+    image: harbor.cyan.com/cyan/dataworks-spark-sql:4.0.2
+    image-pull-policy: Always
+    image-pull-secret: harbor-secret
+    type: Java
+    spark-version: 4.0.2
+    main-application-file: local:///opt/spark/app/dataworks-spark-runner.jar
+    main-class: com.cyan.dataworks.spark.SqlRunner
+    service-account: spark-operator-spark
+    driver-cores: 1
+    driver-memory: 1g
+    driver-core-limit: 1200m
+    executor-instances: 1
+    executor-cores: 1
+    executor-memory: 2g
+    executor-core-limit: 1200m
+    ttl-seconds-after-finished: 300
+    sql-mount-path: /opt/spark/work-dir/dataworks
+    iceberg-rest-uri: http://gravitino-iceberg-rest-server.gravitino.svc.cluster.local:9001/iceberg
+    rustfs-endpoint: http://10.0.0.2:9000
+    rustfs-access-key: rustfsadmin
+    rustfs-secret-key: rustfsadmin
