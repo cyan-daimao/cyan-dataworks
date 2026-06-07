@@ -73,6 +73,7 @@ dataworks:
     executor-core-limit: 1200m
     ttl-seconds-after-finished: 300
     sql-mount-path: /opt/spark/work-dir/dataworks
+    time-zone: Asia/Shanghai
     iceberg-rest-uri: http://gravitino-iceberg-rest-server.gravitino.svc.cluster.local:9001/iceberg
     rustfs-endpoint: http://10.0.0.2:9000
     rustfs-access-key: rustfsadmin

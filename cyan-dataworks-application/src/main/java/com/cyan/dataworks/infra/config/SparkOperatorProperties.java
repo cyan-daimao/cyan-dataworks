@@ -114,6 +114,11 @@ public class SparkOperatorProperties {
     private String sqlMountPath = "/opt/spark/work-dir/dataworks";
 
     /**
+     * Spark运行时区
+     */
+    private String timeZone = "Asia/Shanghai";
+
+    /**
      * Iceberg REST Catalog地址
      */
     private String icebergRestUri = "http://gravitino-iceberg-rest-server.gravitino.svc.cluster.local:9001/iceberg";

@@ -279,6 +279,9 @@ public class SparkApplicationOperatorService {
                     coreLimit: %s
                     memory: %s
                     serviceAccount: %s
+                    env:
+                      - name: TZ
+                        value: %s
                     labels:
                       dataworks-instance-id: %s
                     volumeMounts:
@@ -289,6 +292,9 @@ public class SparkApplicationOperatorService {
                     cores: %d
                     coreLimit: %s
                     memory: %s
+                    env:
+                      - name: TZ
+                        value: %s
                     labels:
                       dataworks-instance-id: %s
                     volumeMounts:
@@ -314,12 +320,14 @@ public class SparkApplicationOperatorService {
                 yamlQuote(runtimeConfig.driverCoreLimit()),
                 yamlQuote(runtimeConfig.driverMemory()),
                 runtimeConfig.serviceAccount(),
+                yamlQuote(runtimeConfig.timeZone()),
                 yamlQuote(instanceId),
                 runtimeConfig.sqlMountPath(),
                 runtimeConfig.executorInstances(),
                 runtimeConfig.executorCores(),
                 yamlQuote(runtimeConfig.executorCoreLimit()),
                 yamlQuote(runtimeConfig.executorMemory()),
+                yamlQuote(runtimeConfig.timeZone()),
                 yamlQuote(instanceId),
                 runtimeConfig.sqlMountPath());
     }
@@ -336,6 +344,10 @@ public class SparkApplicationOperatorService {
         sparkConf.put("spark.sql.catalog.iceberg.s3.secret-access-key", runtimeConfig.rustfsSecretKey());
         sparkConf.put("spark.sql.catalog.iceberg.s3.path-style-access", "true");
         sparkConf.put("spark.sql.defaultCatalog", "iceberg");
+        sparkConf.put("spark.sql.session.timeZone", runtimeConfig.timeZone());
+        sparkConf.put("spark.driver.extraJavaOptions", "-Duser.timezone=" + runtimeConfig.timeZone());
+        sparkConf.put("spark.executor.extraJavaOptions", "-Duser.timezone=" + runtimeConfig.timeZone());
+        sparkConf.put("spark.executorEnv.TZ", runtimeConfig.timeZone());
         sparkConf.putAll(runtimeConfig.sparkConf());
         return sparkConf;
     }
@@ -365,6 +377,7 @@ public class SparkApplicationOperatorService {
                 properties.getRustfsEndpoint(),
                 properties.getRustfsAccessKey(),
                 properties.getRustfsSecretKey(),
+                properties.getTimeZone(),
                 Optional.ofNullable(properties.getSparkConf()).orElse(Map.of())
         );
         if (configJson == null || configJson.isBlank()) {
@@ -409,6 +422,7 @@ public class SparkApplicationOperatorService {
                     stringValue(spark, "rustfsEndpoint", defaults.rustfsEndpoint()),
                     stringValue(spark, "rustfsAccessKey", defaults.rustfsAccessKey()),
                     stringValue(spark, "rustfsSecretKey", defaults.rustfsSecretKey()),
+                    stringValue(spark, "timeZone", defaults.timeZone()),
                     sparkConf
             );
         } catch (Exception e) {
@@ -541,6 +555,7 @@ public class SparkApplicationOperatorService {
                                       String rustfsEndpoint,
                                       String rustfsAccessKey,
                                       String rustfsSecretKey,
+                                      String timeZone,
                                       Map<String, String> sparkConf) {
     }
 }
