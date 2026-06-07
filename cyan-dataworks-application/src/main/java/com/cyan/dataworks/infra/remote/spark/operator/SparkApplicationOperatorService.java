@@ -243,7 +243,7 @@ public class SparkApplicationOperatorService {
                 .collect(Collectors.joining("\n"));
         String imagePullSecretsYaml = runtimeConfig.imagePullSecret() == null || runtimeConfig.imagePullSecret().isBlank()
                 ? ""
-                : "  imagePullSecrets:\n    - name: " + runtimeConfig.imagePullSecret() + "\n";
+                : "  imagePullSecrets:\n    - " + yamlQuote(runtimeConfig.imagePullSecret()) + "\n";
 
         return """
                 apiVersion: %s
@@ -298,7 +298,7 @@ public class SparkApplicationOperatorService {
                 runtimeConfig.apiVersion(),
                 applicationName,
                 runtimeConfig.namespace(),
-                instanceId,
+                yamlQuote(instanceId),
                 runtimeConfig.type(),
                 runtimeConfig.image(),
                 runtimeConfig.imagePullPolicy(),
@@ -314,13 +314,13 @@ public class SparkApplicationOperatorService {
                 yamlQuote(runtimeConfig.driverCoreLimit()),
                 yamlQuote(runtimeConfig.driverMemory()),
                 runtimeConfig.serviceAccount(),
-                instanceId,
+                yamlQuote(instanceId),
                 runtimeConfig.sqlMountPath(),
                 runtimeConfig.executorInstances(),
                 runtimeConfig.executorCores(),
                 yamlQuote(runtimeConfig.executorCoreLimit()),
                 yamlQuote(runtimeConfig.executorMemory()),
-                instanceId,
+                yamlQuote(instanceId),
                 runtimeConfig.sqlMountPath());
     }
 

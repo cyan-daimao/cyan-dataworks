@@ -1,0 +1,44 @@
+# ============================================================
+# DataWorks 预发环境操作 Spark Operator 资源所需的最小 RBAC
+#
+# DataWorks 服务运行在 pre namespace 的 default ServiceAccount 下。
+# Spark SQL 任务会在 spark namespace 创建 SparkApplication 和 SQL ConfigMap，
+# 并读取 driver/executor Pod 日志。
+# ============================================================
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dataworks-spark-operator-manager
+  namespace: spark
+rules:
+  - apiGroups: ["sparkoperator.k8s.io"]
+    resources: ["sparkapplications"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dataworks-spark-operator-manager-pre
+  namespace: spark
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: pre
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dataworks-spark-operator-manager
