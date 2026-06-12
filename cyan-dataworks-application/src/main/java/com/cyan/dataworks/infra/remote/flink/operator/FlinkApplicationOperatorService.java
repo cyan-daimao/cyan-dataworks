@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -35,16 +36,16 @@ import java.util.Optional;
 @Component
 public class FlinkApplicationOperatorService {
 
-    @Value("${flink.operator.namespace:flink}")
+    @Value("${flink.operator.namespace:dataworks}")
     private String defaultNamespace;
 
-    @Value("${flink.operator.image:harbor.cyan.com/cyan/flink-sql:2.0.1}")
+    @Value("${flink.operator.image:harbor.cyan.com/cyan/dataworks-flink-sql:2.0.1}")
     private String defaultImage;
 
-    @Value("${flink.operator.jar-uri:local:///opt/flink/lib/sql-runner.jar}")
+    @Value("${flink.operator.jar-uri:local:///opt/flink/lib/flink-sql-runner.jar}")
     private String defaultJarUri;
 
-    @Value("${flink.operator.entry-class:com.cyan.dataman.infra.flink.SqlRunner}")
+    @Value("${flink.operator.entry-class:com.cyan.dataworks.flink.SqlRunner}")
     private String defaultEntryClass;
 
     @Value("${flink.operator.parallelism:1}")
@@ -480,6 +481,13 @@ public class FlinkApplicationOperatorService {
         int parallelism = cmd.getParallelism() != null ? cmd.getParallelism() : defaultParallelism;
         int taskManagerMemoryGb = cmd.getTaskManagerMemoryGb() != null ? cmd.getTaskManagerMemoryGb() : 1;
         double taskManagerCpu = cmd.getTaskManagerCpu() != null ? cmd.getTaskManagerCpu() : 0.5D;
+        int jobManagerMemoryGb = cmd.getJobManagerMemoryGb() != null ? cmd.getJobManagerMemoryGb() : 1;
+        double jobManagerCpu = cmd.getJobManagerCpu() != null ? cmd.getJobManagerCpu() : 0.5D;
+        String flinkVersion = orDefault(cmd.getFlinkVersion(), "v2_0");
+        String upgradeMode = orDefault(cmd.getUpgradeMode(), "last-state");
+        String state = orDefault(cmd.getState(), "running");
+
+        String flinkConfigurationYaml = renderFlinkConfiguration(cmd);
 
         return String.format("""
                 apiVersion: flink.apache.org/v1beta1
@@ -490,37 +498,25 @@ public class FlinkApplicationOperatorService {
                 spec:
                   serviceAccount: flink
                   image: %s
-                  flinkVersion: v2_0
+                  flinkVersion: %s
                   jobManager:
                     resource:
-                      memory: "1g"
-                      cpu: 0.5
+                      memory: "%dg"
+                      cpu: %s
                   taskManager:
                     resource:
                       memory: "%dg"
                       cpu: %s
                   flinkConfiguration:
-                    state.backend.type: rocksdb
-                    classloader.parent-first-patterns.additional: com.codahale.metrics
-                    state.checkpoints.dir: s3://flink/checkpoints/cyan-dataworks
-                    state.savepoints.dir: s3://flink/savepoints/cyan-dataworks
-                    execution.checkpointing.interval: 60s
-                    execution.checkpointing.timeout: 600s
-                    execution.checkpointing.max-concurrent-checkpoints: 1
-                    execution.checkpointing.min-pause: 500ms
-                    execution.checkpointing.mode: EXACTLY_ONCE
-                    s3.endpoint: %s
-                    s3.access-key: %s
-                    s3.secret-key: %s
-                    s3.path.style.access: true
+                %s
                   job:
                     jarURI: %s
                     entryClass: %s
                     args:
                       - "/opt/flink/sql/job.sql"
                     parallelism: %d
-                    upgradeMode: last-state
-                    state: running
+                    upgradeMode: %s
+                    state: %s
                   podTemplate:
                     spec:
                       imagePullSecrets:
@@ -536,11 +532,81 @@ public class FlinkApplicationOperatorService {
                           configMap:
                             name: %s
                 """,
-                deploymentName, namespace, image,
+                deploymentName, namespace, image, flinkVersion,
+                jobManagerMemoryGb, formatCpu(jobManagerCpu),
                 taskManagerMemoryGb, formatCpu(taskManagerCpu),
-                rustfsEndpoint, rustfsAccessKey, rustfsSecretKey,
+                flinkConfigurationYaml,
                 jarUri, entryClass, parallelism,
+                upgradeMode, state,
                 configMapName);
+    }
+
+    /**
+     * 渲染 flinkConfiguration 段：合并默认值与用户自定义，统一按 4 空格缩进输出
+     */
+    private String renderFlinkConfiguration(FlinkApplicationSubmitCmd cmd) {
+        Map<String, String> merged = new LinkedHashMap<>();
+        merged.put("state.backend.type", orDefault(cmd.getStateBackendType(), "rocksdb"));
+        merged.put("classloader.parent-first-patterns.additional", "com.codahale.metrics");
+        merged.put("state.checkpoints.dir", "s3://flink/checkpoints/cyan-dataworks");
+        merged.put("state.savepoints.dir", "s3://flink/savepoints/cyan-dataworks");
+        merged.put("execution.checkpointing.interval", orDefault(cmd.getCheckpointInterval(), "60s"));
+        merged.put("execution.checkpointing.timeout", orDefault(cmd.getCheckpointTimeout(), "600s"));
+        merged.put("execution.checkpointing.max-concurrent-checkpoints",
+                String.valueOf(cmd.getCheckpointMaxConcurrent() != null ? cmd.getCheckpointMaxConcurrent() : 1));
+        merged.put("execution.checkpointing.min-pause", orDefault(cmd.getCheckpointMinPause(), "500ms"));
+        merged.put("execution.checkpointing.mode", orDefault(cmd.getCheckpointMode(), "EXACTLY_ONCE"));
+        merged.put("s3.endpoint", rustfsEndpoint);
+        merged.put("s3.access-key", rustfsAccessKey);
+        merged.put("s3.secret-key", rustfsSecretKey);
+        merged.put("s3.path.style.access", "true");
+
+        // 用户自定义键值对覆盖默认值
+        Map<String, String> extra = cmd.getExtraFlinkConfiguration();
+        if (extra != null) {
+            extra.forEach((key, value) -> {
+                if (key != null && !key.isBlank() && value != null) {
+                    merged.put(key, value);
+                }
+            });
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> entry : merged.entrySet()) {
+            sb.append("    ").append(entry.getKey()).append(": ").append(escapeYamlScalar(entry.getValue())).append("\n");
+        }
+        // 去掉末尾换行交给上层 String.format 控制布局
+        if (sb.length() > 0 && sb.charAt(sb.length() - 1) == '\n') {
+            sb.deleteCharAt(sb.length() - 1);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 字符串值兜底
+     */
+    private String orDefault(String value, String defaultValue) {
+        return (value == null || value.isBlank()) ? defaultValue : value;
+    }
+
+    /**
+     * YAML 标量转义：含特殊字符时加双引号并转义内部反斜杠/引号
+     */
+    private String escapeYamlScalar(String raw) {
+        if (raw == null) {
+            return "\"\"";
+        }
+        if (raw.isEmpty()) {
+            return "\"\"";
+        }
+        boolean needQuote = raw.chars().anyMatch(ch -> ch == ':' || ch == '#' || ch == '\n' || ch == '\r'
+                || ch == '\'' || ch == '"' || ch == '{' || ch == '}' || ch == '[' || ch == ']'
+                || ch == ',' || ch == '&' || ch == '*' || ch == '!' || ch == '|' || ch == '>'
+                || ch == '%' || ch == '@' || ch == '`');
+        if (!needQuote && !raw.startsWith(" ") && !raw.endsWith(" ")) {
+            return raw;
+        }
+        return "\"" + raw.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     /**

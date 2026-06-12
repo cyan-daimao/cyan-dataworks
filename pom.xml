@@ -12,6 +12,7 @@
         <module>cyan-dataworks-application</module>
         <module>cyan-dataworks-client</module>
         <module>cyan-dataworks-spark-runner</module>
+        <module>cyan-dataworks-flink-runner</module>
     </modules>
 
     <properties>

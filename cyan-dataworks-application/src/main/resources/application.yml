@@ -36,10 +36,10 @@ flink:
     s3-path-style-access: true
   operator:
     enabled: true
-    namespace: flink
-    image: harbor.cyan.com/cyan/flink-sql:2.0.1
-    jar-uri: local:///opt/flink/lib/sql-runner.jar
-    entry-class: com.cyan.dataman.infra.flink.SqlRunner
+    namespace: dataworks
+    image: harbor.cyan.com/cyan/dataworks-flink-sql:2.0.1
+    jar-uri: local:///opt/flink/lib/flink-sql-runner.jar
+    entry-class: com.cyan.dataworks.flink.SqlRunner
     parallelism: 1
 airflow:
   enabled: ${AIRFLOW_ENABLED:true}

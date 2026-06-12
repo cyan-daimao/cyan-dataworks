@@ -149,7 +149,19 @@ public class FlinkRemoteService {
                 .setSql(sql)
                 .setTaskManagerMemoryGb(runtimeConfig.getTaskManagerMemoryGb())
                 .setTaskManagerCpu(runtimeConfig.getTaskManagerCpu())
-                .setParallelism(runtimeConfig.getParallelism());
+                .setParallelism(runtimeConfig.getParallelism())
+                .setJobManagerMemoryGb(runtimeConfig.getJobManagerMemoryGb())
+                .setJobManagerCpu(runtimeConfig.getJobManagerCpu())
+                .setFlinkVersion(runtimeConfig.getFlinkVersion())
+                .setUpgradeMode(runtimeConfig.getUpgradeMode())
+                .setState(runtimeConfig.getState())
+                .setCheckpointInterval(runtimeConfig.getCheckpointInterval())
+                .setCheckpointTimeout(runtimeConfig.getCheckpointTimeout())
+                .setCheckpointMaxConcurrent(runtimeConfig.getCheckpointMaxConcurrent())
+                .setCheckpointMinPause(runtimeConfig.getCheckpointMinPause())
+                .setCheckpointMode(runtimeConfig.getCheckpointMode())
+                .setStateBackendType(runtimeConfig.getStateBackendType())
+                .setExtraFlinkConfiguration(runtimeConfig.getExtraFlinkConfiguration());
 
         FlinkApplicationBO result = flinkApplicationOperatorService.submit(cmd);
 
@@ -166,11 +178,23 @@ public class FlinkRemoteService {
         resultMap.put("message", result.getMessage());
         resultMap.put("jobManagerPodName", result.getJobManagerPodName());
         resultMap.put("taskManagerPodNames", Optional.ofNullable(result.getTaskManagerPodNames()).orElse(List.of()));
-        resultMap.put("runtimeConfig", Map.of(
-                "taskManagerMemoryGb", runtimeConfig.getTaskManagerMemoryGb(),
-                "taskManagerCpu", runtimeConfig.getTaskManagerCpu(),
-                "parallelism", runtimeConfig.getParallelism()
-        ));
+        Map<String, Object> runtimeConfigMap = new LinkedHashMap<>();
+        runtimeConfigMap.put("taskManagerMemoryGb", runtimeConfig.getTaskManagerMemoryGb());
+        runtimeConfigMap.put("taskManagerCpu", runtimeConfig.getTaskManagerCpu());
+        runtimeConfigMap.put("parallelism", runtimeConfig.getParallelism());
+        runtimeConfigMap.put("jobManagerMemoryGb", runtimeConfig.getJobManagerMemoryGb());
+        runtimeConfigMap.put("jobManagerCpu", runtimeConfig.getJobManagerCpu());
+        runtimeConfigMap.put("flinkVersion", runtimeConfig.getFlinkVersion());
+        runtimeConfigMap.put("upgradeMode", runtimeConfig.getUpgradeMode());
+        runtimeConfigMap.put("state", runtimeConfig.getState());
+        runtimeConfigMap.put("checkpointInterval", runtimeConfig.getCheckpointInterval());
+        runtimeConfigMap.put("checkpointTimeout", runtimeConfig.getCheckpointTimeout());
+        runtimeConfigMap.put("checkpointMaxConcurrent", runtimeConfig.getCheckpointMaxConcurrent());
+        runtimeConfigMap.put("checkpointMinPause", runtimeConfig.getCheckpointMinPause());
+        runtimeConfigMap.put("checkpointMode", runtimeConfig.getCheckpointMode());
+        runtimeConfigMap.put("stateBackendType", runtimeConfig.getStateBackendType());
+        runtimeConfigMap.put("flinkConfiguration", Optional.ofNullable(runtimeConfig.getExtraFlinkConfiguration()).orElse(Map.of()));
+        resultMap.put("runtimeConfig", runtimeConfigMap);
         return JSON.toJSONString(resultMap);
     }
 

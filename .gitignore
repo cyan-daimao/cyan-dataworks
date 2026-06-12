@@ -3,3 +3,6 @@ target/
 *.iml
 *.log
 .DS_Store
+
+# Flink connector jar（部署时从 Harbor 镜像内置或单独下载，不进 git）
+deploy/flink-k8s/flink-sql-connector-kafka-*.jar
