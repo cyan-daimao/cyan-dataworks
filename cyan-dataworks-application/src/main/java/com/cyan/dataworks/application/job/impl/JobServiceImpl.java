@@ -15,6 +15,7 @@ import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfig;
 import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfigParser;
 import com.cyan.dataworks.application.job.lineage.JobLineageSyncService;
 import com.cyan.dataworks.domain.job.Job;
+import com.cyan.dataworks.domain.job.SqlPolicy;
 import com.cyan.dataworks.domain.job.dependency.JobDependency;
 import com.cyan.dataworks.domain.job.dependency.repository.JobDependencyRepository;
 import com.cyan.dataworks.domain.job.query.JobPageQuery;
@@ -185,6 +186,7 @@ public class JobServiceImpl implements JobService {
         Job job = existing.publish(jobRepository);
         jobLineageSyncService.sync(job);
         if (isRealtimeFlinkSql(job)) {
+            SqlPolicy.assertFlinkApplicationSql(job.getContent());
             syncFlinkApplicationIfNeeded(job);
         } else {
             JobSchedule schedule = jobScheduleRepository.findByJobId(id);

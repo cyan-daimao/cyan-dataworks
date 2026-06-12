@@ -7,6 +7,7 @@ import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfig;
 import com.cyan.dataworks.application.job.runtime.FlinkRuntimeConfigParser;
 import com.cyan.dataworks.application.job.runtime.JobExecutionPlanner;
 import com.cyan.dataworks.domain.job.Job;
+import com.cyan.dataworks.domain.job.SqlPolicy;
 import com.cyan.dataworks.domain.job_instance.JobInstance;
 import com.cyan.dataworks.enums.NodeType;
 import com.cyan.dataworks.infra.remote.flink.FlinkRemoteService;
@@ -60,6 +61,7 @@ public class FlinkBatchSqlJobExecutor implements JobExecutor {
         if ("preview".equals(instance.getId())) {
             throw new SilentException("FlinkSQL批任务临时执行暂不支持，请保存并发布后通过Airflow调度运行");
         }
+        SqlPolicy.assertFlinkApplicationSql(job.getContent());
         String executableSql = jobExecutionPlanner.buildExecutableSql(job);
         FlinkRuntimeConfig runtimeConfig = flinkRuntimeConfigParser.parse(job);
         String resultData = flinkRemoteService.submitApplication(instance.getId(), job.getName(), executableSql, runtimeConfig);

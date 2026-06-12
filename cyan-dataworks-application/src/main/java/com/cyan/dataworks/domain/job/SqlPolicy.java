@@ -4,6 +4,8 @@ import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.SilentException;
 import com.cyan.arch.common.util.StrUtils;
 
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -97,9 +99,41 @@ public final class SqlPolicy {
     }
 
     /**
+     * 校验Flink Application模式SQL
+     */
+    public static void assertFlinkApplicationSql(String sql) {
+        Assert.notBlank(sql, new SilentException("任务内容不能为空"));
+        String normalized = removeComments(sql);
+        boolean hasInsert = Arrays.stream(normalized.split(";"))
+                .map(String::trim)
+                .filter(statement -> !statement.isBlank())
+                .map(statement -> statement.replaceAll("\\s+", " ").toUpperCase(Locale.ROOT))
+                .anyMatch(statement -> statement.startsWith("INSERT "));
+        if (!hasInsert) {
+            throw new SilentException("FlinkSQL正式任务必须包含 INSERT INTO ... SELECT ...，SELECT 查询请使用临时运行/预览");
+        }
+        boolean hasSelectOnly = Arrays.stream(normalized.split(";"))
+                .map(String::trim)
+                .filter(statement -> !statement.isBlank())
+                .map(statement -> statement.replaceAll("\\s+", " ").toUpperCase(Locale.ROOT))
+                .anyMatch(statement -> statement.startsWith("SELECT ") || statement.startsWith("WITH "));
+        if (hasSelectOnly) {
+            throw new SilentException("FlinkSQL正式任务不支持直接执行 SELECT/WITH 查询，请改为 INSERT INTO sink_table SELECT ...");
+        }
+    }
+
+    /**
      * 判断 SQL 是否为空
      */
     public static boolean isBlank(String sql) {
         return StrUtils.isBlank(sql);
+    }
+
+    /**
+     * 移除SQL注释
+     */
+    private static String removeComments(String sql) {
+        String withoutBlockComments = sql.replaceAll("(?s)/\\*.*?\\*/", "");
+        return withoutBlockComments.replaceAll("(?m)^\\s*--.*\\n?", "");
     }
 }
