@@ -12,11 +12,11 @@ import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.client.dsl.ContainerResource;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
+import io.fabric8.kubernetes.client.utils.Serialization;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -82,9 +82,8 @@ public class FlinkApplicationOperatorService {
             log.info("ConfigMap 创建/更新成功: {} in namespace {}", configMapName, namespace);
 
             String yaml = buildFlinkDeploymentYaml(cmd, namespace);
-            k8sClient.load(new java.io.ByteArrayInputStream(yaml.getBytes(StandardCharsets.UTF_8)))
-                    .inNamespace(namespace)
-                    .createOrReplace();
+            GenericKubernetesResource flinkDeployment = Serialization.unmarshal(yaml, GenericKubernetesResource.class);
+            k8sClient.resource(flinkDeployment).inNamespace(namespace).serverSideApply();
             log.info("FlinkDeployment 创建/更新成功: {} in namespace {}", deploymentName, namespace);
 
             List<Pod> pods = waitApplicationPods(deploymentName, namespace);
@@ -93,6 +92,9 @@ public class FlinkApplicationOperatorService {
                     .setConfigMapName(configMapName)
                     .setNamespace(namespace)
                     .setStatus("RUNNING")
+                    .setRunning(true)
+                    .setCompleted(false)
+                    .setFailed(false)
                     .setMessage("Flink Application 提交成功")
                     .setJobManagerPodName(findJobManagerPodName(pods))
                     .setTaskManagerPodNames(findTaskManagerPodNames(pods));
@@ -173,6 +175,65 @@ public class FlinkApplicationOperatorService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * 查询FlinkDeployment状态
+     *
+     * @param deploymentName FlinkDeployment名称
+     * @param namespace      命名空间
+     * @return Flink Application状态
+     */
+    public FlinkApplicationBO getStatus(String deploymentName, String namespace) {
+        String actualNamespace = namespace == null || namespace.isBlank() ? defaultNamespace : namespace;
+        GenericKubernetesResource resource;
+        try {
+            resource = k8sClient.genericKubernetesResources("flink.apache.org/v1beta1", "FlinkDeployment")
+                    .inNamespace(actualNamespace)
+                    .withName(deploymentName)
+                    .get();
+        } catch (Exception e) {
+            log.warn("查询FlinkDeployment失败: namespace={}, deploymentName={}, error={}",
+                    actualNamespace, deploymentName, e.getMessage());
+            resource = null;
+        }
+        if (resource == null) {
+            return new FlinkApplicationBO()
+                    .setDeploymentName(deploymentName)
+                    .setNamespace(actualNamespace)
+                    .setStatus("NOT_FOUND")
+                    .setRunning(false)
+                    .setCompleted(false)
+                    .setFailed(true)
+                    .setMessage("FlinkDeployment不存在或已被删除");
+        }
+        Map<String, Object> additionalProperties = Optional.ofNullable(resource.getAdditionalProperties()).orElse(Map.of());
+        Map<String, Object> status = asMap(additionalProperties.get("status"));
+        Map<String, Object> jobStatus = asMap(status.get("jobStatus"));
+        Map<String, Object> reconciliationStatus = asMap(status.get("reconciliationStatus"));
+        String state = Optional.ofNullable(jobStatus.get("state"))
+                .map(String::valueOf)
+                .filter(value -> !value.isBlank())
+                .orElseGet(() -> Optional.ofNullable(reconciliationStatus.get("state"))
+                        .map(String::valueOf)
+                        .orElse("UNKNOWN"));
+        String message = Optional.ofNullable(jobStatus.get("error"))
+                .map(String::valueOf)
+                .filter(value -> !value.isBlank())
+                .orElseGet(() -> Optional.ofNullable(status.get("error"))
+                        .map(String::valueOf)
+                        .orElse(""));
+        return new FlinkApplicationBO()
+                .setDeploymentName(deploymentName)
+                .setConfigMapName(deploymentName + "-sql")
+                .setNamespace(actualNamespace)
+                .setStatus(state)
+                .setRunning(isRunningState(state))
+                .setCompleted(isCompletedState(state))
+                .setFailed(isFailedState(state))
+                .setMessage(message)
+                .setJobManagerPodName(findJobManagerPodName(deploymentName, actualNamespace))
+                .setTaskManagerPodNames(findTaskManagerPodNames(deploymentName, actualNamespace));
     }
 
     /**
@@ -361,7 +422,53 @@ public class FlinkApplicationOperatorService {
                 .endMetadata()
                 .addToData("job.sql", sql)
                 .build();
-        k8sClient.configMaps().inNamespace(namespace).createOrReplace(configMap);
+        k8sClient.resource(configMap).inNamespace(namespace).serverSideApply();
+    }
+
+    /**
+     * 转换Map
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> asMap(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        return Map.of();
+    }
+
+    /**
+     * 是否运行中状态
+     */
+    private boolean isRunningState(String state) {
+        String normalized = Optional.ofNullable(state).orElse("").toUpperCase(Locale.ROOT);
+        return normalized.isBlank()
+                || "UNKNOWN".equals(normalized)
+                || "CREATED".equals(normalized)
+                || "RECONCILING".equals(normalized)
+                || "DEPLOYING".equals(normalized)
+                || "RUNNING".equals(normalized);
+    }
+
+    /**
+     * 是否成功完成状态
+     */
+    private boolean isCompletedState(String state) {
+        String normalized = Optional.ofNullable(state).orElse("").toUpperCase(Locale.ROOT);
+        return "FINISHED".equals(normalized)
+                || "COMPLETED".equals(normalized);
+    }
+
+    /**
+     * 是否失败状态
+     */
+    private boolean isFailedState(String state) {
+        String normalized = Optional.ofNullable(state).orElse("").toUpperCase(Locale.ROOT);
+        return "FAILED".equals(normalized)
+                || "FAILING".equals(normalized)
+                || "CANCELED".equals(normalized)
+                || "CANCELLED".equals(normalized)
+                || "SUSPENDED".equals(normalized)
+                || "NOT_FOUND".equals(normalized);
     }
 
     private String buildFlinkDeploymentYaml(FlinkApplicationSubmitCmd cmd, String namespace) {

@@ -160,6 +160,9 @@ public class FlinkRemoteService {
         resultMap.put("configMapName", result.getConfigMapName());
         resultMap.put("namespace", result.getNamespace());
         resultMap.put("status", result.getStatus());
+        resultMap.put("running", result.getRunning());
+        resultMap.put("completed", result.getCompleted());
+        resultMap.put("failed", result.getFailed());
         resultMap.put("message", result.getMessage());
         resultMap.put("jobManagerPodName", result.getJobManagerPodName());
         resultMap.put("taskManagerPodNames", Optional.ofNullable(result.getTaskManagerPodNames()).orElse(List.of()));
@@ -187,6 +190,17 @@ public class FlinkRemoteService {
                                                      int tailLines,
                                                      boolean previous) {
         return flinkApplicationOperatorService.getPodLogs(deploymentName, namespace, role, tailLines, previous);
+    }
+
+    /**
+     * 查询Application Mode作业状态
+     *
+     * @param deploymentName FlinkDeployment名称
+     * @param namespace      命名空间
+     * @return Flink Application状态
+     */
+    public FlinkApplicationBO getApplicationStatus(String deploymentName, String namespace) {
+        return flinkApplicationOperatorService.getStatus(deploymentName, namespace);
     }
 
     /**

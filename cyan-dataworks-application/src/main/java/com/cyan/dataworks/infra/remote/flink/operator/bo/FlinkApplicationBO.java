@@ -38,6 +38,21 @@ public class FlinkApplicationBO {
     private String status;
 
     /**
+     * 是否运行中
+     */
+    private Boolean running;
+
+    /**
+     * 是否成功完成
+     */
+    private Boolean completed;
+
+    /**
+     * 是否失败
+     */
+    private Boolean failed;
+
+    /**
      * 消息
      */
     private String message;

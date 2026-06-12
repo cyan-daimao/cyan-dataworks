@@ -23,8 +23,8 @@ import com.cyan.dataworks.domain.job.schedule.JobSchedule;
 import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
 import com.cyan.dataworks.domain.job_instance.JobInstance;
 import com.cyan.dataworks.domain.job_instance.repository.JobInstanceRepository;
-import com.cyan.dataworks.enums.EngineType;
 import com.cyan.dataworks.enums.ExecutionStatus;
+import com.cyan.dataworks.enums.NodeType;
 import com.cyan.dataworks.enums.TaskStatus;
 import com.cyan.dataworks.infra.remote.airflow.AirflowOrchestrationGateway;
 import com.cyan.dataworks.infra.remote.flink.FlinkRemoteService;
@@ -162,10 +162,12 @@ public class JobServiceImpl implements JobService {
         deleteFlinkApplicationIfNeeded(existing);
         jobDependencyService.deleteByJobId(id);
         existing.delete(jobRepository);
-        try {
-            airflowGateway.deleteDag(airflowGateway.buildJobDagId(id));
-        } catch (Exception e) {
-            log.warn("DataWorks作业DAG删除跳过: jobId={}, reason={}", id, e.getMessage());
+        if (isAirflowSchedulable(existing)) {
+            try {
+                airflowGateway.deleteDag(airflowGateway.buildJobDagId(id));
+            } catch (Exception e) {
+                log.warn("DataWorks作业DAG删除跳过: jobId={}, reason={}", id, e.getMessage());
+            }
         }
     }
 
@@ -182,9 +184,13 @@ public class JobServiceImpl implements JobService {
         existing.setUpdatedBy(updatedBy);
         Job job = existing.publish(jobRepository);
         jobLineageSyncService.sync(job);
-        JobSchedule schedule = jobScheduleRepository.findByJobId(id);
-        if (schedule != null) {
-            airflowGateway.syncDagPaused(airflowGateway.buildJobDagId(id), !Boolean.TRUE.equals(schedule.getEnabled()), false);
+        if (isRealtimeFlinkSql(job)) {
+            syncFlinkApplicationIfNeeded(job);
+        } else {
+            JobSchedule schedule = jobScheduleRepository.findByJobId(id);
+            if (schedule != null) {
+                airflowGateway.syncDagPaused(airflowGateway.buildJobDagId(id), !Boolean.TRUE.equals(schedule.getEnabled()), false);
+            }
         }
         log.info("DataWorks作业发布完成: jobId={}, name={}, engineType={}, nodeType={}, status={}",
                 job.getId(), job.getName(), job.getEngineType(), job.getNodeType(), job.getStatus());
@@ -195,7 +201,7 @@ public class JobServiceImpl implements JobService {
      * Flink Job 发布时，若已有运行中的 Application，则删除旧资源并重新创建
      */
     private void syncFlinkApplicationIfNeeded(Job job) {
-        if (job.getEngineType() != EngineType.FLINK) {
+        if (!isRealtimeFlinkSql(job)) {
             return;
         }
         try {
@@ -225,7 +231,7 @@ public class JobServiceImpl implements JobService {
             }
         } catch (Exception e) {
             log.error("Flink Job {} 同步 K8s Application 失败: {}", job.getId(), e.getMessage(), e);
-            // 不抛异常，避免影响发布操作本身
+            throw new SilentException("FlinkSQL实时任务发布失败，Flink Operator同步异常: " + e.getMessage());
         }
     }
 
@@ -314,7 +320,7 @@ public class JobServiceImpl implements JobService {
      * Flink Job 下线/删除时，清理对应的 K8s Application
      */
     private void deleteFlinkApplicationIfNeeded(Job job) {
-        if (job.getEngineType() != EngineType.FLINK) {
+        if (!isRealtimeFlinkSql(job)) {
             return;
         }
         try {
@@ -346,7 +352,9 @@ public class JobServiceImpl implements JobService {
         existing.setUpdatedBy(updatedBy);
         Job job = existing.offline(jobRepository);
         deleteFlinkApplicationIfNeeded(job);
-        airflowGateway.syncDagPaused(airflowGateway.buildJobDagId(id), true, false);
+        if (isAirflowSchedulable(job)) {
+            airflowGateway.syncDagPaused(airflowGateway.buildJobDagId(id), true, false);
+        }
         return JobAppConvert.INSTANCE.toJobBO(job);
     }
 
@@ -366,10 +374,13 @@ public class JobServiceImpl implements JobService {
         if (job == null || job.getStatus() != TaskStatus.ONLINE) {
             return Optional.empty();
         }
+        if (!isAirflowSchedulable(job)) {
+            return Optional.empty();
+        }
         List<JobDagDefinitionBO.ExternalDependencyBO> externalDependencies = jobDependencyRepository.listByDownstreamJobId(job.getId()).stream()
                 .map(JobDependency::getUpstreamJobId)
                 .map(jobRepository::findById)
-                .filter(upstream -> upstream != null && upstream.getStatus() == TaskStatus.ONLINE)
+                .filter(upstream -> upstream != null && upstream.getStatus() == TaskStatus.ONLINE && isAirflowSchedulable(upstream))
                 .map(upstream -> new JobDagDefinitionBO.ExternalDependencyBO()
                         .setUpstreamDagId(airflowGateway.buildJobDagId(upstream.getId()))
                         .setUpstreamJobId(upstream.getId())
@@ -384,5 +395,19 @@ public class JobServiceImpl implements JobService {
                 .setEngineType(job.getEngineType())
                 .setNodeType(job.getNodeType())
                 .setExternalDependencies(externalDependencies));
+    }
+
+    /**
+     * 是否是FlinkSQL实时任务
+     */
+    private boolean isRealtimeFlinkSql(Job job) {
+        return job != null && job.getNodeType() == NodeType.FLINK_SQL;
+    }
+
+    /**
+     * 是否允许生成Airflow DAG
+     */
+    private boolean isAirflowSchedulable(Job job) {
+        return job != null && !isRealtimeFlinkSql(job);
     }
 }

@@ -20,7 +20,7 @@ public class UnsupportedBatchJobExecutor implements JobExecutor {
      */
     @Override
     public boolean supports(NodeType nodeType) {
-        return nodeType == NodeType.SPARK_BATCH || nodeType == NodeType.FLINK_BATCH;
+        return nodeType == NodeType.SPARK_BATCH;
     }
 
     /**

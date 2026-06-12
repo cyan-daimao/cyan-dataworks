@@ -19,9 +19,9 @@ public enum NodeType {
     SPARK_SQL("SPARK_SQL", "SparkSQL"),
 
     /**
-     * FlinkSQL 节点
+     * FlinkSQL实时任务节点
      */
-    FLINK_SQL("FLINK_SQL", "FlinkSQL"),
+    FLINK_SQL("FLINK_SQL", "FlinkSQL实时任务"),
 
     /**
      * Spark批任务节点
@@ -29,9 +29,9 @@ public enum NodeType {
     SPARK_BATCH("SPARK_BATCH", "Spark批任务"),
 
     /**
-     * Flink批任务节点
+     * FlinkSQL批任务节点
      */
-    FLINK_BATCH("FLINK_BATCH", "Flink批任务"),
+    FLINK_BATCH("FLINK_BATCH", "FlinkSQL批任务"),
 
     /**
      * Shell脚本节点
@@ -67,7 +67,7 @@ public enum NodeType {
      * 是否是 SQL 类节点
      */
     public boolean isSqlNode() {
-        return this == SPARK_SQL || this == FLINK_SQL;
+        return this == SPARK_SQL || this == FLINK_SQL || this == FLINK_BATCH;
     }
 
     /**

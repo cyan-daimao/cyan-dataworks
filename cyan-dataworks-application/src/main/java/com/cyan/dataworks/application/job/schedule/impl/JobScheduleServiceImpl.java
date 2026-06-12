@@ -11,6 +11,7 @@ import com.cyan.dataworks.domain.job.schedule.JobSchedule;
 import com.cyan.dataworks.domain.job.schedule.repository.JobScheduleRepository;
 import com.cyan.dataworks.domain.job.repository.JobRepository;
 import com.cyan.dataworks.infra.remote.airflow.AirflowOrchestrationGateway;
+import com.cyan.dataworks.enums.NodeType;
 import com.cyan.dataworks.enums.TaskStatus;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
@@ -70,6 +71,7 @@ public class JobScheduleServiceImpl implements JobScheduleService {
         JobSchedule schedule = JobScheduleAppConvert.INSTANCE.toJobSchedule(cmd)
                 .setJobId(jobId)
                 .setUpdatedBy(operator);
+        validateScheduleSupported(job, schedule);
         validateCronExpressionIfEnabled(schedule);
         JobSchedule existing = jobScheduleRepository.findByJobId(jobId);
         if (existing == null) {
@@ -81,7 +83,7 @@ public class JobScheduleServiceImpl implements JobScheduleService {
                     .setCreatedAt(existing.getCreatedAt());
             schedule = schedule.update(jobScheduleRepository);
         }
-        if (job.getStatus() == TaskStatus.ONLINE) {
+        if (job.getStatus() == TaskStatus.ONLINE && job.getNodeType() != NodeType.FLINK_SQL) {
             airflowGateway.syncDagPaused(airflowGateway.buildJobDagId(jobId), !Boolean.TRUE.equals(schedule.getEnabled()), false);
         }
         return JobScheduleAppConvert.INSTANCE.toJobScheduleBO(schedule);
@@ -90,6 +92,12 @@ public class JobScheduleServiceImpl implements JobScheduleService {
     private void validateCronExpressionIfEnabled(JobSchedule schedule) {
         if (Boolean.TRUE.equals(schedule.getEnabled())) {
             validateCronExpression(schedule.getCronExpression());
+        }
+    }
+
+    private void validateScheduleSupported(Job job, JobSchedule schedule) {
+        if (job.getNodeType() == NodeType.FLINK_SQL && Boolean.TRUE.equals(schedule.getEnabled())) {
+            throw new SilentException("FlinkSQL实时任务不支持Airflow调度，请使用FlinkSQL批任务");
         }
     }
 
