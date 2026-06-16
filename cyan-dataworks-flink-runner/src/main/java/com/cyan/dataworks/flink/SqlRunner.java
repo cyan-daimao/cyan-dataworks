@@ -30,6 +30,8 @@ import java.util.Locale;
  */
 public class SqlRunner {
 
+    private static final String DYNAMIC_TABLE_OPTIONS_ENABLED = "table.dynamic-table-options.enabled";
+
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
             throw new IllegalArgumentException("Usage: SqlRunner <sql-file-path>");
@@ -43,6 +45,7 @@ public class SqlRunner {
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         StreamTableEnvironment tableEnv = StreamTableEnvironment.create(env);
+        tableEnv.getConfig().getConfiguration().setString(DYNAMIC_TABLE_OPTIONS_ENABLED, "true");
 
         // 分离 SET、元数据和 INSERT 语句
         List<String> configStmts = new ArrayList<>();
@@ -96,7 +99,7 @@ public class SqlRunner {
     }
 
     private static String removeComments(String sql) {
-        String withoutBlockComments = sql.replaceAll("(?s)/\\*.*?\\*/", "");
+        String withoutBlockComments = sql.replaceAll("(?s)/\\*(?!\\+).*?\\*/", "");
         return withoutBlockComments.replaceAll("(?m)^\\s*--.*\\n?", "");
     }
 
