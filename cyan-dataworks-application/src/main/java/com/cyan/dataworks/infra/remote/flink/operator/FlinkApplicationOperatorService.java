@@ -612,13 +612,6 @@ public class FlinkApplicationOperatorService {
                 logger.netty.name = org.apache.flink.shaded.akka.org.jboss.netty.channel.DefaultChannelPipeline
                 logger.netty.level = OFF
                 """);
-        logConfiguration.put("log4j.properties", """
-                log4j.rootLogger=INFO, console
-                log4j.appender.console=org.apache.log4j.ConsoleAppender
-                log4j.appender.console.target=System.out
-                log4j.appender.console.layout=org.apache.log4j.PatternLayout
-                log4j.appender.console.layout.ConversionPattern=%d{ISO8601} %-5p %-60c %x - %m%n
-                """);
         logConfiguration.put("logback-console.xml", """
                 <configuration>
                   <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
