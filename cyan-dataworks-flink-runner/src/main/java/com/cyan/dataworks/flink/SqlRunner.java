@@ -98,9 +98,16 @@ public class SqlRunner {
         }
     }
 
+    /**
+     * 移除SQL注释。
+     * <p>
+     * 块注释 {@code /* ... *\/} 中保留 Flink 动态表选项 hint {@code /*+ ... *\/}（执行需要）；
+     * 行注释 {@code -- ...} 从 {@code --} 删到行尾并保留换行，既处理整行注释，也处理写在
+     * 语句尾部的内联注释，避免按 {@code ;} 切分时行尾注释与后续语句粘连导致语句被误判。
+     */
     private static String removeComments(String sql) {
         String withoutBlockComments = sql.replaceAll("(?s)/\\*(?!\\+).*?\\*/", "");
-        return withoutBlockComments.replaceAll("(?m)^\\s*--.*\\n?", "");
+        return withoutBlockComments.replaceAll("(?m)--[^\\n]*", "");
     }
 
     private static boolean isExecutableMetadataStatement(String upper) {

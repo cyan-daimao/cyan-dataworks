@@ -131,9 +131,14 @@ public final class SqlPolicy {
 
     /**
      * 移除SQL注释
+     * <p>
+     * 先去除块注释 {@code /* ... *\/}，再去除行注释 {@code -- ...}。
+     * 行注释从 {@code --} 一直删到行尾且保留换行，既能处理整行注释，
+     * 也能处理写在语句尾部的内联注释，避免按 {@code ;} 切分时把行尾注释和
+     * 后续语句粘连成同一段（导致 INSERT 被误判为缺失）。
      */
     private static String removeComments(String sql) {
         String withoutBlockComments = sql.replaceAll("(?s)/\\*.*?\\*/", "");
-        return withoutBlockComments.replaceAll("(?m)^\\s*--.*\\n?", "");
+        return withoutBlockComments.replaceAll("(?m)--[^\\n]*", "");
     }
 }
