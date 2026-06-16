@@ -488,6 +488,7 @@ public class FlinkApplicationOperatorService {
         String state = orDefault(cmd.getState(), "running");
 
         String flinkConfigurationYaml = renderFlinkConfiguration(cmd);
+        String logConfigurationYaml = renderLogConfiguration();
 
         return String.format("""
                 apiVersion: flink.apache.org/v1beta1
@@ -499,6 +500,8 @@ public class FlinkApplicationOperatorService {
                   serviceAccount: flink
                   image: %s
                   flinkVersion: %s
+                  logConfiguration:
+                %s
                   jobManager:
                     resource:
                       memory: "%dg"
@@ -533,6 +536,7 @@ public class FlinkApplicationOperatorService {
                             name: %s
                 """,
                 deploymentName, namespace, image, flinkVersion,
+                logConfigurationYaml,
                 jobManagerMemoryGb, formatCpu(jobManagerCpu),
                 taskManagerMemoryGb, formatCpu(taskManagerCpu),
                 flinkConfigurationYaml,
@@ -576,6 +580,65 @@ public class FlinkApplicationOperatorService {
             sb.append("    ").append(entry.getKey()).append(": ").append(escapeYamlScalar(entry.getValue())).append("\n");
         }
         // 去掉末尾换行交给上层 String.format 控制布局
+        if (sb.length() > 0 && sb.charAt(sb.length() - 1) == '\n') {
+            sb.deleteCharAt(sb.length() - 1);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 渲染Flink日志配置，确保JobManager/TaskManager日志输出到容器stdout。
+     */
+    private String renderLogConfiguration() {
+        Map<String, String> logConfiguration = new LinkedHashMap<>();
+        logConfiguration.put("log4j-console.properties", """
+                monitorInterval = 30
+                rootLogger.level = INFO
+                rootLogger.appenderRef.console.ref = ConsoleAppender
+
+                appender.console.name = ConsoleAppender
+                appender.console.type = CONSOLE
+                appender.console.layout.type = PatternLayout
+                appender.console.layout.pattern = %d{yyyy-MM-dd HH:mm:ss,SSS} %-5p %-60c %x - %m%n
+
+                logger.akka.name = akka
+                logger.akka.level = INFO
+                logger.kafka.name = org.apache.kafka
+                logger.kafka.level = INFO
+                logger.hadoop.name = org.apache.hadoop
+                logger.hadoop.level = INFO
+                logger.zookeeper.name = org.apache.zookeeper
+                logger.zookeeper.level = INFO
+                logger.netty.name = org.apache.flink.shaded.akka.org.jboss.netty.channel.DefaultChannelPipeline
+                logger.netty.level = OFF
+                """);
+        logConfiguration.put("log4j.properties", """
+                log4j.rootLogger=INFO, console
+                log4j.appender.console=org.apache.log4j.ConsoleAppender
+                log4j.appender.console.target=System.out
+                log4j.appender.console.layout=org.apache.log4j.PatternLayout
+                log4j.appender.console.layout.ConversionPattern=%d{ISO8601} %-5p %-60c %x - %m%n
+                """);
+        logConfiguration.put("logback-console.xml", """
+                <configuration>
+                  <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+                    <encoder>
+                      <pattern>%d{yyyy-MM-dd HH:mm:ss,SSS} %-5level %-60logger %X - %msg%n</pattern>
+                    </encoder>
+                  </appender>
+                  <root level="INFO">
+                    <appender-ref ref="console"/>
+                  </root>
+                </configuration>
+                """);
+
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> entry : logConfiguration.entrySet()) {
+            sb.append("    ").append(entry.getKey()).append(": |").append("\n");
+            for (String line : entry.getValue().stripTrailing().split("\\R", -1)) {
+                sb.append("      ").append(line).append("\n");
+            }
+        }
         if (sb.length() > 0 && sb.charAt(sb.length() - 1) == '\n') {
             sb.deleteCharAt(sb.length() - 1);
         }
